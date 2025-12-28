@@ -1,0 +1,741 @@
+#!/bin/bash
+
+# Source this file from ~/.zshrc to load the shell function `claude-worktree`
+#
+# Usage:
+#   claude-worktree              # Interactive menu
+#   claude-worktree new          # Create new worktree
+#   claude-worktree issue [num]  # Work on a GitHub issue
+#   claude-worktree pr [num]     # Review a GitHub PR
+#   claude-worktree list         # List existing worktrees
+
+# ============================================================================
+# Dependencies check
+# ============================================================================
+
+_cw_check_deps() {
+  local missing=()
+
+  if ! command -v gum &> /dev/null; then
+    missing+=("gum (install with: brew install gum)")
+  fi
+
+  if ! command -v gh &> /dev/null; then
+    missing+=("gh (install with: brew install gh)")
+  fi
+
+  if ! command -v jq &> /dev/null; then
+    missing+=("jq (install with: brew install jq)")
+  fi
+
+  if [[ ${#missing[@]} -gt 0 ]]; then
+    echo "Missing required dependencies:"
+    for dep in "${missing[@]}"; do
+      echo "  - $dep"
+    done
+    return 1
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# Word lists for random names
+# ============================================================================
+
+_WORKTREE_WORDS=(
+  able acid acme acre aged airy alfa ally also alto amid
+  apex aqua arch area army arte atom aunt auto away axis
+  baby back ball band bank barn base bath bead beam bean
+  bear beat been beer bell belt bend best beta bike bill
+  bird bits blaz blob blue boat body bold bolt bomb bond
+  bone book boot born boss both bowl brad brew brig brown
+  buck bulb bulk bull burn bush busy byte cafe cage cake
+  call calm came camp cane cape card care carl cart case
+  cash cast cave cell cent chad chef chip city clam clan
+  clay clip club coal coat code coil coin cold cole come
+  cone cook cool cope copy cord core cork corn cost cove
+  crab crew crop crow cube cure curl dark dash data date
+  dawn days dead deal dean dear debt deck deep deer dell
+  demo deny desk dial dice died diet dime dine dirt disc
+  dish dive dock does dome done doom door dose dove down
+  doze drag draw drew drip drop drum dual duck dude dune
+  dusk dust duty each earl earn ease east easy echo edge
+  edit else ends epic even ever exam exit eyed eyes face
+  fact fade fail fair fall fame fang fare farm fast fate
+  fawn fear feat feed feel feet fell felt fern fest file
+  fill film find fine fire firm fish fist five flag flat
+  flaw fled flee flew flex flip flow flux foam fold folk
+  fond font food fool foot ford fork form fort foul four
+  free from fuel full fund fuse gain game gang gate gave
+  gear gene gift girl give glad glow glue goal goat goes
+  gold golf gone good gore grab grad gram gray grew grey
+  grid grim grin grip grit grow gulf gust hack hail hair
+  half hall halt hand hang hard hare harm hart hash hate
+  haul have hawk haze head heal heap hear heat heck held
+  help herb here hero hide high hike hill hint hire hold
+  hole holy home hone hood hook hope horn hose host hour
+  huge hulk hunt hurt icon idea idle inch info into iron
+  isle item jack jade jane jazz jean jest joey john join
+  joke july jump june junk jury just keen keep kent kept
+  keys kick kind king kirk kiss kite knee knew know kong
+  lace lack lady laid lake lamb lame lamp land lane lark
+  last late lava lawn lead leaf lean leap left lend lens
+  lent less levy lied lift like lily limb lime line link
+  lion list lite live load loaf loan lock loft logo lone
+  long look loop lord lore lose loss lost loud love luck
+  luke lump lung lurk made mage maid mail main make male
+  mall malt mann many maps mare mark mars mart mask mass
+  mast mate math matt maze mead meal mean meat meek meet
+  meld melt memo mesh mess mica mice mild mile milk mill
+  mime mind mine mint miss mist moan mock mode mold molt
+  monk moon moor moss most moth move mule murk muse mush
+  musk must mute myth nail name navy near neat neck need
+  nest newt next nice nick nine node noon norm nose note
+  nova obey odor okay omen once only onto open oral oven
+  over pace pack pact page paid pail pain pair pale palm
+  pane park part pass past path pave pawn peak pear peat
+  peck peek peer pelt penn perk pest pets peak pier pike
+  pile pill pine pink pint pipe pith plan play plea plot
+  plow plug plum plus poem poet pole poll polo pond pony
+  pool poor pore pork port pose post pour pray prey prim
+  prod prom prop puck pull pulp pump punk pure push quit
+  quiz race rack raft rage raid rail rain rake ramp rand
+  rang rank rare rate rave rays read real ream reap rear
+  reed reef reel rely rend rent rest rice rich rick ride
+  rife rift rift ring riot ripe rise risk rite road roam
+  roar robe rock rode role roll rome roof room root rope
+  rose rosy ruby rude ruin rule rump rune rung runs runt
+  rush rust ruth sack safe saga sage said sail sake sale
+  salt same sand sane sang sank save sawn says scan scar
+  seal seam sean sear seat sect seed seek seem seen seep
+  self sell send sent sept sets shad shah sham shed shin
+  ship shoe shop shot show shut sick side sift sign silk
+  sill silo silt sing sink site size skew skin skip slab
+  slam slap slat slaw sled slew slim slip slit slow slug
+  snap snip snow soak soap soar sock soda soft soil sold
+  sole solo some song soon soot sore sort soul soup sour
+  span spar spec sped spin spit spot spun spur stab stag
+  star stay stem step stew stir stop stow stub stud subs
+  such suit sulk sung sunk sure surf swan swap sway swim
+  tail take tale talk tall tame tang tank tape tart task
+  taxi team tear tech teem teen tell temp tend tent term
+  test text than that thaw thee them then they thin this
+  thou thud thus tick tide tidy tied tier tile till tilt
+  time tint tiny tips tire toad toil told toll tomb tome
+  tone tony took tool torn toss tour town toys trap tray
+  tree trek trim trio trip trod trot troy true tuba tube
+  tuck tuft tune turf turn tusk twas twig twin type ugly
+  undo unit upon used user vain vale vane vary vase vast
+  veil vein vent verb very vest veto vice view vile vine
+  void volt vote wade wage wait wake walk wall wand wane
+  want ward warm warn warp wars wary wash wasp wave wavy
+  waxy ways weak wear weed week weep weld well went wept
+  were west what when whey whim whip whom wide wife wild
+  will wilt wind wine wing wink wipe wire wise wish with
+  woke wolf womb wood wool word wore work worm worn wove
+  wrap wren yang yard yarn yawn year yell your zero zest
+  zinc zone zoom
+)
+
+_WORKTREE_COLORS=(
+  red orange yellow green blue purple pink brown black white
+  gray cyan magenta teal navy coral salmon peach mint lime
+  gold silver bronze ruby jade amber ivory onyx pearl slate
+  crimson scarlet maroon olive azure indigo violet lavender
+  turquoise aqua beige cream tan khaki rust copper plum rose
+)
+
+# ============================================================================
+# Helper functions
+# ============================================================================
+
+_cw_ensure_git_repo() {
+  if ! git rev-parse --git-dir > /dev/null 2>&1; then
+    gum style --foreground 1 "Error: Not in a git repository"
+    return 1
+  fi
+  return 0
+}
+
+_cw_get_repo_info() {
+  _CW_GIT_ROOT=$(git rev-parse --show-toplevel)
+  _CW_SOURCE_FOLDER=$(basename "$_CW_GIT_ROOT")
+  _CW_WORKTREE_BASE="$HOME/worktrees/$_CW_SOURCE_FOLDER"
+}
+
+_cw_prune_worktrees() {
+  local count_before=$(git worktree list --porcelain 2>/dev/null | grep -c "^worktree " || echo 0)
+  git worktree prune 2>/dev/null
+  local count_after=$(git worktree list --porcelain 2>/dev/null | grep -c "^worktree " || echo 0)
+  local pruned=$((count_before - count_after))
+  if [[ $pruned -gt 0 ]]; then
+    gum style --foreground 3 "Pruned $pruned orphaned worktree(s)"
+    echo ""
+  fi
+}
+
+_cw_generate_random_name() {
+  local color=${_WORKTREE_COLORS[$RANDOM % ${#_WORKTREE_COLORS[@]}]}
+  local word1=${_WORKTREE_WORDS[$RANDOM % ${#_WORKTREE_WORDS[@]}]}
+  local word2=${_WORKTREE_WORDS[$RANDOM % ${#_WORKTREE_WORDS[@]}]}
+  echo "${color}-${word1}-${word2}"
+}
+
+_cw_sanitize_branch_name() {
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//'
+}
+
+_cw_extract_issue_number() {
+  # Extract issue number from branch name patterns like:
+  # work/123-description, issue-123, 123-fix-something
+  local branch="$1"
+  echo "$branch" | grep -oE '(^|[^0-9])([0-9]+)' | head -1 | grep -oE '[0-9]+' | head -1
+}
+
+_cw_check_issue_merged() {
+  # Check if an issue or its linked PR was merged into main
+  # Returns 0 if merged, 1 if not merged or error
+  local issue_num="$1"
+
+  if [[ -z "$issue_num" ]]; then
+    return 1
+  fi
+
+  # First check if issue is closed
+  local issue_state=$(gh issue view "$issue_num" --json state --jq '.state' 2>/dev/null)
+
+  if [[ "$issue_state" != "CLOSED" ]]; then
+    return 1
+  fi
+
+  # Check if there's a linked PR that was merged
+  # GitHub's stateReason can tell us if it was completed (often means PR merged)
+  local state_reason=$(gh issue view "$issue_num" --json stateReason --jq '.stateReason' 2>/dev/null)
+
+  if [[ "$state_reason" == "COMPLETED" ]]; then
+    return 0
+  fi
+
+  # Also check for PRs that reference this issue and are merged
+  local merged_prs=$(gh pr list --state merged --search "closes #$issue_num OR fixes #$issue_num OR resolves #$issue_num" --json number --jq 'length' 2>/dev/null)
+
+  if [[ "$merged_prs" -gt 0 ]] 2>/dev/null; then
+    return 0
+  fi
+
+  return 1
+}
+
+_cw_check_branch_pr_merged() {
+  # Check if the branch itself has a merged PR (regardless of issue linkage)
+  # Returns 0 if merged, 1 if not
+  local branch_name="$1"
+
+  if [[ -z "$branch_name" ]]; then
+    return 1
+  fi
+
+  # Check if there's a merged PR for this branch
+  local pr_state=$(gh pr view "$branch_name" --json state,mergedAt --jq '.state' 2>/dev/null)
+
+  if [[ "$pr_state" == "MERGED" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+_cw_create_worktree() {
+  local branch_name="$1"
+  local worktree_name=$(_cw_sanitize_branch_name "$branch_name")
+  local worktree_path="$_CW_WORKTREE_BASE/$worktree_name"
+
+  mkdir -p "$_CW_WORKTREE_BASE"
+
+  # Check if branch already exists
+  local branch_exists=false
+  if git show-ref --verify --quiet "refs/heads/${branch_name}"; then
+    branch_exists=true
+    local existing_worktree=$(git worktree list --porcelain | grep -A2 "^worktree " | grep -B1 "branch refs/heads/${branch_name}$" | head -1 | sed 's/^worktree //')
+    if [[ -n "$existing_worktree" ]]; then
+      gum style --foreground 1 "Error: Branch '${branch_name}' already has a worktree at:"
+      echo "  $existing_worktree"
+      return 1
+    fi
+    gum style --foreground 3 "Branch '${branch_name}' exists, creating worktree for it..."
+  fi
+
+  local base_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
+
+  echo ""
+  gum style --border rounded --padding "0 1" --border-foreground 4 \
+    "Creating worktree" \
+    "  Path:   $worktree_path" \
+    "  Branch: $branch_name" \
+    $([[ "$branch_exists" == "false" ]] && echo "  Base:   $base_branch")
+
+  local worktree_cmd_success=false
+  if [[ "$branch_exists" == "true" ]]; then
+    if gum spin --spinner dot --title "Creating worktree..." -- git worktree add "$worktree_path" "$branch_name"; then
+      worktree_cmd_success=true
+    fi
+  else
+    if gum spin --spinner dot --title "Creating worktree..." -- git worktree add -b "$branch_name" "$worktree_path" "$base_branch"; then
+      worktree_cmd_success=true
+    fi
+  fi
+
+  if [[ "$worktree_cmd_success" == "true" ]]; then
+    cd "$worktree_path" || return 1
+    echo ""
+    gum style --foreground 2 "Starting Claude Code..."
+    claude --dangerously-skip-permissions
+  else
+    gum style --foreground 1 "Failed to create worktree"
+    return 1
+  fi
+}
+
+# ============================================================================
+# List worktrees
+# ============================================================================
+
+_cw_list() {
+  _cw_ensure_git_repo || return 1
+  _cw_get_repo_info
+  _cw_prune_worktrees
+
+  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+  local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
+
+  if [[ $worktree_count -le 1 ]]; then
+    gum style --foreground 8 "No additional worktrees for $_CW_SOURCE_FOLDER"
+    return 0
+  fi
+
+  local now=$(date +%s)
+  local one_day=$((24 * 60 * 60))
+  local four_days=$((4 * 24 * 60 * 60))
+
+  local oldest_wt_path=""
+  local oldest_wt_branch=""
+  local oldest_age=0
+
+  # Track merged worktrees for cleanup prompt
+  local -a merged_wt_paths=()
+  local -a merged_wt_branches=()
+  local -a merged_wt_issues=()
+
+  local output=""
+
+  while IFS= read -r wt_path; do
+    [[ "$wt_path" == "$_CW_GIT_ROOT" ]] && continue
+    [[ ! -d "$wt_path" ]] && continue
+
+    local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
+
+    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+      commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1)
+    fi
+
+    # Check if this worktree is linked to a merged issue or has a merged PR
+    local issue_num=$(_cw_extract_issue_number "$wt_branch")
+    local is_merged=false
+    local merged_indicator=""
+    local merge_reason=""
+
+    if [[ -n "$issue_num" ]] && _cw_check_issue_merged "$issue_num"; then
+      is_merged=true
+      merge_reason="issue #$issue_num"
+      merged_indicator=" $(gum style --foreground 5 "[merged #$issue_num]")"
+    elif _cw_check_branch_pr_merged "$wt_branch"; then
+      is_merged=true
+      merge_reason="PR"
+      merged_indicator=" $(gum style --foreground 5 "[PR merged]")"
+    fi
+
+    if [[ "$is_merged" == "true" ]]; then
+      merged_wt_paths+=("$wt_path")
+      merged_wt_branches+=("$wt_branch")
+      merged_wt_issues+=("$merge_reason")
+    fi
+
+    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+      output+="  $(gum style --foreground 8 "$(basename "$wt_path")") ($wt_branch) [unknown]${merged_indicator}\n"
+      continue
+    fi
+
+    local age=$((now - commit_timestamp))
+    local age_days=$((age / one_day))
+    local age_hours=$((age / 3600))
+
+    local age_str
+    local age_color
+    if [[ $age -lt $one_day ]]; then
+      age_str="${age_hours}h ago"
+      age_color="2"  # green
+    elif [[ $age -lt $four_days ]]; then
+      age_str="${age_days}d ago"
+      age_color="3"  # yellow
+    else
+      age_str="${age_days}d ago"
+      age_color="1"  # red
+      # Only track as stale if not already marked as merged
+      if [[ "$is_merged" == "false" ]] && [[ $age -gt $oldest_age ]]; then
+        oldest_age=$age
+        oldest_wt_path="$wt_path"
+        oldest_wt_branch="$wt_branch"
+      fi
+    fi
+
+    output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground $age_color "[$age_str]")${merged_indicator}\n"
+  done <<< "$worktree_list"
+
+  if [[ -n "$output" ]]; then
+    gum style --border rounded --padding "0 1" --border-foreground 4 \
+      "Worktrees for $_CW_SOURCE_FOLDER"
+    echo -e "$output"
+  fi
+
+  # Prompt to clean up merged worktrees first (priority over stale)
+  if [[ ${#merged_wt_paths[@]} -gt 0 ]]; then
+    local i=1
+    while [[ $i -le ${#merged_wt_paths[@]} ]]; do
+      local m_path="${merged_wt_paths[$i]}"
+      local m_branch="${merged_wt_branches[$i]}"
+      local m_reason="${merged_wt_issues[$i]}"
+
+      echo ""
+      gum style --foreground 5 "Linked $m_reason was merged! Worktree can be cleaned up: $(basename "$m_path") ($m_branch)"
+
+      if gum confirm "Clean up this worktree?"; then
+        gum spin --spinner dot --title "Removing worktree..." -- git worktree remove --force "$m_path"
+        gum style --foreground 2 "Worktree removed."
+
+        if git show-ref --verify --quiet "refs/heads/${m_branch}"; then
+          if gum confirm "Also delete branch '$m_branch'?"; then
+            git branch -D "$m_branch" 2>/dev/null
+            gum style --foreground 2 "Branch deleted."
+          fi
+        fi
+      fi
+      ((i++))
+    done
+    return 0
+  fi
+
+  # Prompt to clean up stale worktree (only if no merged worktrees)
+  if [[ -n "$oldest_wt_path" ]]; then
+    local days=$((oldest_age / one_day))
+    echo ""
+    gum style --foreground 1 "Stale worktree detected (${days}d old): $(basename "$oldest_wt_path") ($oldest_wt_branch)"
+
+    if gum confirm "Clean up this worktree?"; then
+      gum spin --spinner dot --title "Removing worktree..." -- git worktree remove --force "$oldest_wt_path"
+      gum style --foreground 2 "Worktree removed."
+
+      if git show-ref --verify --quiet "refs/heads/${oldest_wt_branch}"; then
+        if gum confirm "Also delete branch '$oldest_wt_branch'?"; then
+          git branch -D "$oldest_wt_branch" 2>/dev/null
+          gum style --foreground 2 "Branch deleted."
+        fi
+      fi
+    fi
+  fi
+}
+
+# ============================================================================
+# New worktree
+# ============================================================================
+
+_cw_new() {
+  _cw_ensure_git_repo || return 1
+  _cw_get_repo_info
+  _cw_prune_worktrees
+
+  # Show existing worktrees
+  _cw_list
+
+  echo ""
+
+  local branch_input=$(gum input --placeholder "Branch name (leave blank for random)")
+
+  local branch_name
+  local worktree_name
+
+  if [[ -z "$branch_input" ]]; then
+    worktree_name=$(_cw_generate_random_name)
+    branch_name="work/${worktree_name}"
+    gum style --foreground 6 "Generated: $branch_name"
+  else
+    branch_name="$branch_input"
+  fi
+
+  _cw_create_worktree "$branch_name"
+}
+
+# ============================================================================
+# Issue integration
+# ============================================================================
+
+_cw_issue() {
+  _cw_ensure_git_repo || return 1
+  _cw_get_repo_info
+
+  local issue_num="${1:-}"
+
+  if [[ -z "$issue_num" ]]; then
+    gum spin --spinner dot --title "Fetching issues..." -- sleep 0.1
+
+    local issues=$(gh issue list --limit 20 --state open --json number,title,labels \
+      --template '{{range .}}#{{.number}} | {{.title}}{{if .labels}} |{{range .labels}} {{.name}}{{end}}{{end}}{{"\n"}}{{end}}' 2>/dev/null)
+
+    if [[ -z "$issues" ]]; then
+      gum style --foreground 1 "No open issues found or not in a GitHub repository"
+      return 1
+    fi
+
+    local selection=$(echo "$issues" | gum filter --placeholder "Select an issue to work on...")
+
+    if [[ -z "$selection" ]]; then
+      gum style --foreground 3 "Cancelled"
+      return 0
+    fi
+
+    issue_num=$(echo "$selection" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+  fi
+
+  # Fetch issue details
+  local issue_data=$(gh issue view "$issue_num" --json number,title 2>/dev/null)
+
+  if [[ -z "$issue_data" ]]; then
+    gum style --foreground 1 "Could not fetch issue #$issue_num"
+    return 1
+  fi
+
+  local title=$(echo "$issue_data" | jq -r '.title')
+
+  # Generate suggested branch name
+  local sanitized=$(_cw_sanitize_branch_name "$title" | cut -c1-40)
+  local suggested="work/${issue_num}-${sanitized}"
+
+  echo ""
+  gum style --border rounded --padding "0 1" --border-foreground 5 \
+    "Issue #${issue_num}" \
+    "$title"
+
+  echo ""
+  local branch_name=$(gum input --value "$suggested" --placeholder "Branch name" --header "Confirm branch name:")
+
+  if [[ -z "$branch_name" ]]; then
+    gum style --foreground 3 "Cancelled"
+    return 0
+  fi
+
+  _cw_create_worktree "$branch_name"
+}
+
+# ============================================================================
+# PR review integration
+# ============================================================================
+
+_cw_pr() {
+  _cw_ensure_git_repo || return 1
+  _cw_get_repo_info
+
+  local pr_num="${1:-}"
+
+  if [[ -z "$pr_num" ]]; then
+    gum spin --spinner dot --title "Fetching pull requests..." -- sleep 0.1
+
+    local prs=$(gh pr list --limit 20 --state open --json number,title,author,headRefName,baseRefName \
+      --template '{{range .}}#{{.number}} | {{.title}} | @{{.author.login}}{{"\n"}}{{end}}' 2>/dev/null)
+
+    if [[ -z "$prs" ]]; then
+      gum style --foreground 1 "No open PRs found or not in a GitHub repository"
+      return 1
+    fi
+
+    local selection=$(echo "$prs" | gum filter --placeholder "Select a PR to review...")
+
+    if [[ -z "$selection" ]]; then
+      gum style --foreground 3 "Cancelled"
+      return 0
+    fi
+
+    pr_num=$(echo "$selection" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+  fi
+
+  # Get PR details
+  local pr_data=$(gh pr view "$pr_num" --json number,title,headRefName,baseRefName,author 2>/dev/null)
+
+  if [[ -z "$pr_data" ]]; then
+    gum style --foreground 1 "Could not fetch PR #$pr_num"
+    return 1
+  fi
+
+  local title=$(echo "$pr_data" | jq -r '.title')
+  local head_ref=$(echo "$pr_data" | jq -r '.headRefName')
+  local base_ref=$(echo "$pr_data" | jq -r '.baseRefName')
+  local author=$(echo "$pr_data" | jq -r '.author.login')
+
+  echo ""
+  gum style --border rounded --padding "0 1" --border-foreground 5 \
+    "PR #${pr_num} by @${author}" \
+    "$title" \
+    "" \
+    "$head_ref -> $base_ref"
+
+  # Fetch the PR
+  gum spin --spinner dot --title "Fetching PR branch..." -- gh pr checkout "$pr_num" --detach
+
+  # Create worktree for the PR
+  local worktree_name="pr-${pr_num}"
+  local worktree_path="$_CW_WORKTREE_BASE/$worktree_name"
+
+  mkdir -p "$_CW_WORKTREE_BASE"
+
+  # Check if worktree already exists
+  if [[ -d "$worktree_path" ]]; then
+    gum style --foreground 3 "Worktree already exists at $worktree_path"
+    if gum confirm "Switch to existing worktree?"; then
+      cd "$worktree_path" || return 1
+      gum style --foreground 2 "Starting Claude Code..."
+      claude --dangerously-skip-permissions
+      return 0
+    else
+      return 1
+    fi
+  fi
+
+  gum spin --spinner dot --title "Creating worktree..." -- git worktree add "$worktree_path" FETCH_HEAD
+
+  cd "$worktree_path" || return 1
+
+  # Fetch base branch for comparison
+  git fetch origin "$base_ref" 2>/dev/null
+
+  echo ""
+  gum style --border rounded --padding "0 1" --border-foreground 6 \
+    "Changes vs $base_ref"
+
+  git diff --stat "origin/${base_ref}...HEAD" 2>/dev/null || git diff --stat HEAD~5...HEAD 2>/dev/null
+
+  echo ""
+  gum style --foreground 2 "Starting Claude Code for PR review..."
+  claude --dangerously-skip-permissions
+}
+
+# ============================================================================
+# Main menu
+# ============================================================================
+
+_cw_menu() {
+  _cw_ensure_git_repo || return 1
+  _cw_get_repo_info
+
+  # Show existing worktrees
+  _cw_list
+
+  echo ""
+
+  local choice=$(gum choose \
+    "New worktree" \
+    "Work on issue" \
+    "Review PR" \
+    "Cancel")
+
+  case "$choice" in
+    "New worktree")   _cw_new ;;
+    "Work on issue")  _cw_issue ;;
+    "Review PR")      _cw_pr ;;
+    *)                return 0 ;;
+  esac
+}
+
+# ============================================================================
+# Main entry point
+# ============================================================================
+
+claude-worktree() {
+  _cw_check_deps || return 1
+
+  case "${1:-}" in
+    new)   shift; _cw_new "$@" ;;
+    issue) shift; _cw_issue "$@" ;;
+    pr)    shift; _cw_pr "$@" ;;
+    list)  shift; _cw_list ;;
+    help|--help|-h)
+      echo "Usage: claude-worktree [command] [args]"
+      echo ""
+      echo "Commands:"
+      echo "  new           Create a new worktree"
+      echo "  issue [num]   Work on a GitHub issue"
+      echo "  pr [num]      Review a GitHub pull request"
+      echo "  list          List existing worktrees"
+      echo ""
+      echo "Run without arguments for interactive menu."
+      ;;
+    "")    _cw_menu ;;
+    *)
+      gum style --foreground 1 "Unknown command: $1"
+      echo "Run 'claude-worktree help' for usage"
+      return 1
+      ;;
+  esac
+}
+
+# ============================================================================
+# Zsh completion
+# ============================================================================
+
+_claude_worktree() {
+  local -a commands
+  commands=(
+    'new:Create a new worktree'
+    'issue:Work on a GitHub issue'
+    'pr:Review a GitHub pull request'
+    'list:List existing worktrees'
+    'help:Show help message'
+  )
+
+  local curcontext="$curcontext" state
+
+  _arguments -C \
+    '1:command:->command' \
+    '*::arg:->args'
+
+  case $state in
+    command)
+      _describe -t commands 'claude-worktree commands' commands
+      ;;
+    args)
+      case $words[1] in
+        issue)
+          local -a issues
+          if command -v gh &>/dev/null; then
+            issues=(${(f)"$(gh issue list --limit 20 --state open --json number,title \
+              --jq '.[] | "\(.number):\(.title | gsub(":";" "))"' 2>/dev/null)"})
+          fi
+          if [[ ${#issues[@]} -gt 0 ]]; then
+            _describe -t issues 'open issues' issues
+          fi
+          ;;
+        pr)
+          local -a prs
+          if command -v gh &>/dev/null; then
+            prs=(${(f)"$(gh pr list --limit 20 --state open --json number,title \
+              --jq '.[] | "\(.number):\(.title | gsub(":";" "))"' 2>/dev/null)"})
+          fi
+          if [[ ${#prs[@]} -gt 0 ]]; then
+            _describe -t prs 'open pull requests' prs
+          fi
+          ;;
+      esac
+      ;;
+  esac
+}
+
+compdef _claude_worktree claude-worktree
