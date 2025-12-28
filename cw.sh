@@ -371,8 +371,8 @@ _cw_list() {
     local age_days=$((age / one_day))
     local age_hours=$((age / 3600))
 
-    local age_str
-    local age_color
+    local age_str=""
+    local age_color=""
     if [[ $age -lt $one_day ]]; then
       age_str="${age_hours}h ago"
       age_color="2"  # green
@@ -462,11 +462,11 @@ _cw_new() {
 
   local branch_input=$(gum input --placeholder "Branch name (leave blank for random)")
 
-  local branch_name
-  local worktree_name
+  local branch_name=""
+  local worktree_name=""
 
   if [[ -z "$branch_input" ]]; then
-    worktree_name=$(_cw_generate_random_name)
+    worktree_name="$(_cw_generate_random_name)"
     branch_name="work/${worktree_name}"
     gum style --foreground 6 "Generated: $branch_name"
   else
