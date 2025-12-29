@@ -176,9 +176,14 @@ _cw_prune_worktrees() {
 }
 
 _cw_generate_random_name() {
-  local color=${_WORKTREE_COLORS[$RANDOM % ${#_WORKTREE_COLORS[@]}]}
-  local word1=${_WORKTREE_WORDS[$RANDOM % ${#_WORKTREE_WORDS[@]}]}
-  local word2=${_WORKTREE_WORDS[$RANDOM % ${#_WORKTREE_WORDS[@]}]}
+  # In zsh, arrays are 1-indexed, so we need to add 1 to the result of modulo
+  local color_idx=$(( ($RANDOM % ${#_WORKTREE_COLORS[@]}) + 1 ))
+  local word1_idx=$(( ($RANDOM % ${#_WORKTREE_WORDS[@]}) + 1 ))
+  local word2_idx=$(( ($RANDOM % ${#_WORKTREE_WORDS[@]}) + 1 ))
+
+  local color=${_WORKTREE_COLORS[$color_idx]}
+  local word1=${_WORKTREE_WORDS[$word1_idx]}
+  local word2=${_WORKTREE_WORDS[$word2_idx]}
   echo "${color}-${word1}-${word2}"
 }
 
@@ -401,8 +406,7 @@ _cw_list() {
 
   # Prompt to clean up merged worktrees first (priority over stale)
   if [[ ${#merged_wt_paths[@]} -gt 0 ]]; then
-    local i=1
-    while [[ $i -le ${#merged_wt_paths[@]} ]]; do
+    for ((i=1; i<=${#merged_wt_paths[@]}; i++)); do
       local m_path="${merged_wt_paths[$i]}"
       local m_branch="${merged_wt_branches[$i]}"
       local m_reason="${merged_wt_issues[$i]}"
@@ -421,7 +425,6 @@ _cw_list() {
           fi
         fi
       fi
-      ((i++))
     done
     return 0
   fi
@@ -451,12 +454,16 @@ _cw_list() {
 # ============================================================================
 
 _cw_new() {
+  local skip_list="${1:-false}"
+
   _cw_ensure_git_repo || return 1
   _cw_get_repo_info
   _cw_prune_worktrees
 
-  # Show existing worktrees
-  _cw_list
+  # Show existing worktrees (unless called from menu which already showed them)
+  if [[ "$skip_list" == "false" ]]; then
+    _cw_list
+  fi
 
   echo ""
 
@@ -466,8 +473,26 @@ _cw_new() {
   local worktree_name=""
 
   if [[ -z "$branch_input" ]]; then
-    worktree_name="$(_cw_generate_random_name)"
-    branch_name="work/${worktree_name}"
+    # Generate a unique random name
+    local attempts=0
+    local max_attempts=50
+    while [[ $attempts -lt $max_attempts ]]; do
+      worktree_name="$(_cw_generate_random_name)"
+      branch_name="work/${worktree_name}"
+
+      # Check if branch already exists
+      if ! git show-ref --verify --quiet "refs/heads/${branch_name}" 2>/dev/null; then
+        break  # Branch doesn't exist, we can use this name
+      fi
+      ((attempts++))
+    done
+
+    if [[ $attempts -ge $max_attempts ]]; then
+      gum style --foreground 1 "Failed to generate unique branch name after $max_attempts attempts"
+      gum style --foreground 3 "Try specifying a branch name manually"
+      return 1
+    fi
+
     gum style --foreground 6 "Generated: $branch_name"
   else
     branch_name="$branch_input"
@@ -648,7 +673,7 @@ _cw_menu() {
     "Cancel")
 
   case "$choice" in
-    "New worktree")   _cw_new ;;
+    "New worktree")   _cw_new true ;;
     "Work on issue")  _cw_issue ;;
     "Review PR")      _cw_pr ;;
     *)                return 0 ;;
