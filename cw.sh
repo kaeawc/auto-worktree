@@ -376,17 +376,13 @@ _cw_list() {
     local age_days=$((age / one_day))
     local age_hours=$((age / 3600))
 
-    local age_str=""
-    local age_color=""
+    # Build age string and color inline to avoid zsh variable assignment echo bug
     if [[ $age -lt $one_day ]]; then
-      age_str="${age_hours}h ago"
-      age_color="2"  # green
+      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 2 "[${age_hours}h ago]")${merged_indicator}\n"
     elif [[ $age -lt $four_days ]]; then
-      age_str="${age_days}d ago"
-      age_color="3"  # yellow
+      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 3 "[${age_days}d ago]")${merged_indicator}\n"
     else
-      age_str="${age_days}d ago"
-      age_color="1"  # red
+      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 1 "[${age_days}d ago]")${merged_indicator}\n"
       # Only track as stale if not already marked as merged
       if [[ "$is_merged" == "false" ]] && [[ $age -gt $oldest_age ]]; then
         oldest_age=$age
@@ -394,8 +390,6 @@ _cw_list() {
         oldest_wt_branch="$wt_branch"
       fi
     fi
-
-    output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground $age_color "[$age_str]")${merged_indicator}\n"
   done <<< "$worktree_list"
 
   if [[ -n "$output" ]]; then
@@ -405,8 +399,9 @@ _cw_list() {
   fi
 
   # Prompt to clean up merged worktrees first (priority over stale)
-  if [[ ${#merged_wt_paths[@]} -gt 0 ]]; then
-    for ((i=1; i<=${#merged_wt_paths[@]}; i++)); do
+  if [[ ${#merged_wt_paths} -gt 0 ]]; then
+    local i=1
+    while [[ $i -le ${#merged_wt_paths} ]]; do
       local m_path="${merged_wt_paths[$i]}"
       local m_branch="${merged_wt_branches[$i]}"
       local m_reason="${merged_wt_issues[$i]}"
@@ -425,6 +420,7 @@ _cw_list() {
           fi
         fi
       fi
+      ((i++))
     done
     return 0
   fi
@@ -613,9 +609,6 @@ _cw_pr() {
     "" \
     "$head_ref -> $base_ref"
 
-  # Fetch the PR
-  gum spin --spinner dot --title "Fetching PR branch..." -- gh pr checkout "$pr_num" --detach
-
   # Create worktree for the PR
   local worktree_name="pr-${pr_num}"
   local worktree_path="$_CW_WORKTREE_BASE/$worktree_name"
@@ -635,7 +628,12 @@ _cw_pr() {
     fi
   fi
 
-  gum spin --spinner dot --title "Creating worktree..." -- git worktree add "$worktree_path" FETCH_HEAD
+  # Fetch the PR branch and create worktree with proper tracking
+  gum spin --spinner dot --title "Fetching PR branch..." -- git fetch origin "pull/${pr_num}/head:${head_ref}" 2>/dev/null || \
+    git fetch origin "${head_ref}:${head_ref}" 2>/dev/null
+
+  # Create worktree with the PR branch
+  gum spin --spinner dot --title "Creating worktree..." -- git worktree add "$worktree_path" "$head_ref"
 
   cd "$worktree_path" || return 1
 
