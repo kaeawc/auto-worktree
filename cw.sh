@@ -191,6 +191,201 @@ _cw_sanitize_branch_name() {
   echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//'
 }
 
+_cw_setup_environment() {
+  # Automatically set up the development environment based on detected project files
+  local worktree_path="$1"
+
+  if [[ ! -d "$worktree_path" ]]; then
+    return 0
+  fi
+
+  local setup_ran=false
+
+  # Node.js project
+  if [[ -f "$worktree_path/package.json" ]]; then
+    setup_ran=true
+    echo ""
+    gum style --foreground 6 "Detected Node.js project (package.json)"
+
+    # Detect which package manager to use
+    local pkg_manager="npm"
+    local install_cmd=""
+
+    # Check packageManager field in package.json
+    if command -v jq &> /dev/null; then
+      local pkg_mgr_field=$(jq -r '.packageManager // ""' "$worktree_path/package.json" 2>/dev/null)
+      if [[ "$pkg_mgr_field" == pnpm* ]]; then
+        pkg_manager="pnpm"
+      elif [[ "$pkg_mgr_field" == yarn* ]]; then
+        pkg_manager="yarn"
+      fi
+    fi
+
+    # Check for lock files if packageManager field not found
+    if [[ "$pkg_manager" == "npm" ]]; then
+      if [[ -f "$worktree_path/pnpm-lock.yaml" ]]; then
+        pkg_manager="pnpm"
+      elif [[ -f "$worktree_path/yarn.lock" ]]; then
+        pkg_manager="yarn"
+      fi
+    fi
+
+    # Run the appropriate package manager
+    case "$pkg_manager" in
+      pnpm)
+        if command -v pnpm &> /dev/null; then
+          if gum spin --spinner dot --title "Running pnpm install..." -- pnpm install --dir "$worktree_path" --silent; then
+            gum style --foreground 2 "✓ Dependencies installed (pnpm)"
+          else
+            gum style --foreground 3 "⚠ pnpm install had issues (continuing anyway)"
+          fi
+        else
+          gum style --foreground 3 "⚠ pnpm not found, skipping dependency installation"
+        fi
+        ;;
+      yarn)
+        if command -v yarn &> /dev/null; then
+          if gum spin --spinner dot --title "Running yarn install..." -- sh -c "cd '$worktree_path' && yarn install --silent"; then
+            gum style --foreground 2 "✓ Dependencies installed (yarn)"
+          else
+            gum style --foreground 3 "⚠ yarn install had issues (continuing anyway)"
+          fi
+        else
+          gum style --foreground 3 "⚠ yarn not found, skipping dependency installation"
+        fi
+        ;;
+      *)
+        if command -v npm &> /dev/null; then
+          if gum spin --spinner dot --title "Running npm install..." -- npm --prefix "$worktree_path" install --silent; then
+            gum style --foreground 2 "✓ Dependencies installed (npm)"
+          else
+            gum style --foreground 3 "⚠ npm install had issues (continuing anyway)"
+          fi
+        else
+          gum style --foreground 3 "⚠ npm not found, skipping dependency installation"
+        fi
+        ;;
+    esac
+  fi
+
+  # Python project
+  if [[ -f "$worktree_path/requirements.txt" ]] || [[ -f "$worktree_path/pyproject.toml" ]]; then
+    setup_ran=true
+    echo ""
+
+    # Check if uv is available and configured
+    local use_uv=false
+    if command -v uv &> /dev/null; then
+      # Check for uv.lock or [tool.uv] in pyproject.toml
+      if [[ -f "$worktree_path/uv.lock" ]]; then
+        use_uv=true
+      elif [[ -f "$worktree_path/pyproject.toml" ]] && grep -q '\[tool\.uv\]' "$worktree_path/pyproject.toml" 2>/dev/null; then
+        use_uv=true
+      fi
+    fi
+
+    if [[ "$use_uv" == "true" ]]; then
+      gum style --foreground 6 "Detected Python project (uv)"
+      if gum spin --spinner dot --title "Running uv sync..." -- sh -c "cd '$worktree_path' && uv sync"; then
+        gum style --foreground 2 "✓ Dependencies installed (uv + .venv)"
+      else
+        gum style --foreground 3 "⚠ uv sync had issues (continuing anyway)"
+      fi
+    elif [[ -f "$worktree_path/pyproject.toml" ]]; then
+      gum style --foreground 6 "Detected Python project (pyproject.toml)"
+
+      if command -v poetry &> /dev/null && [[ -f "$worktree_path/poetry.lock" ]]; then
+        # Use poetry if poetry.lock exists
+        if gum spin --spinner dot --title "Running poetry install..." -- poetry -C "$worktree_path" install --quiet; then
+          gum style --foreground 2 "✓ Dependencies installed (poetry)"
+        else
+          gum style --foreground 3 "⚠ poetry install had issues (continuing anyway)"
+        fi
+      elif command -v pip &> /dev/null || command -v pip3 &> /dev/null; then
+        # Fall back to pip
+        local pip_cmd=$(command -v pip3 &> /dev/null && echo "pip3" || echo "pip")
+        if gum spin --spinner dot --title "Installing Python dependencies..." -- $pip_cmd install -q -e "$worktree_path"; then
+          gum style --foreground 2 "✓ Dependencies installed (pip)"
+        else
+          gum style --foreground 3 "⚠ pip install had issues (continuing anyway)"
+        fi
+      else
+        gum style --foreground 3 "⚠ No Python package manager found"
+      fi
+    elif [[ -f "$worktree_path/requirements.txt" ]]; then
+      gum style --foreground 6 "Detected Python project (requirements.txt)"
+
+      if command -v pip &> /dev/null || command -v pip3 &> /dev/null; then
+        local pip_cmd=$(command -v pip3 &> /dev/null && echo "pip3" || echo "pip")
+        if gum spin --spinner dot --title "Installing Python dependencies..." -- $pip_cmd install -q -r "$worktree_path/requirements.txt"; then
+          gum style --foreground 2 "✓ Dependencies installed (pip)"
+        else
+          gum style --foreground 3 "⚠ pip install had issues (continuing anyway)"
+        fi
+      else
+        gum style --foreground 3 "⚠ pip not found, skipping dependency installation"
+      fi
+    fi
+  fi
+
+  # Ruby project
+  if [[ -f "$worktree_path/Gemfile" ]]; then
+    setup_ran=true
+    echo ""
+    gum style --foreground 6 "Detected Ruby project (Gemfile)"
+
+    if command -v bundle &> /dev/null; then
+      if gum spin --spinner dot --title "Running bundle install..." -- bundle install --gemfile="$worktree_path/Gemfile" --quiet; then
+        gum style --foreground 2 "✓ Dependencies installed"
+      else
+        gum style --foreground 3 "⚠ bundle install had issues (continuing anyway)"
+      fi
+    else
+      gum style --foreground 3 "⚠ bundle not found, skipping dependency installation"
+    fi
+  fi
+
+  # Go project
+  if [[ -f "$worktree_path/go.mod" ]]; then
+    setup_ran=true
+    echo ""
+    gum style --foreground 6 "Detected Go project (go.mod)"
+
+    if command -v go &> /dev/null; then
+      if gum spin --spinner dot --title "Running go mod download..." -- sh -c "cd '$worktree_path' && go mod download"; then
+        gum style --foreground 2 "✓ Dependencies downloaded"
+      else
+        gum style --foreground 3 "⚠ go mod download had issues (continuing anyway)"
+      fi
+    else
+      gum style --foreground 3 "⚠ go not found, skipping dependency installation"
+    fi
+  fi
+
+  # Rust project
+  if [[ -f "$worktree_path/Cargo.toml" ]]; then
+    setup_ran=true
+    echo ""
+    gum style --foreground 6 "Detected Rust project (Cargo.toml)"
+
+    if command -v cargo &> /dev/null; then
+      if gum spin --spinner dot --title "Running cargo fetch..." -- sh -c "cd '$worktree_path' && cargo fetch --quiet"; then
+        gum style --foreground 2 "✓ Dependencies fetched"
+      else
+        gum style --foreground 3 "⚠ cargo fetch had issues (continuing anyway)"
+      fi
+    else
+      gum style --foreground 3 "⚠ cargo not found, skipping dependency installation"
+    fi
+  fi
+
+  if [[ "$setup_ran" == "true" ]]; then
+    echo ""
+  fi
+
+  return 0
+}
+
 _cw_extract_issue_number() {
   # Extract issue number from branch name patterns like:
   # work/123-description, issue-123, 123-fix-something
@@ -253,6 +448,7 @@ _cw_check_branch_pr_merged() {
 
 _cw_create_worktree() {
   local branch_name="$1"
+  local initial_context="${2:-}"
   local worktree_name=$(_cw_sanitize_branch_name "$branch_name")
   local worktree_path="$_CW_WORKTREE_BASE/$worktree_name"
 
@@ -292,10 +488,16 @@ _cw_create_worktree() {
   fi
 
   if [[ "$worktree_cmd_success" == "true" ]]; then
+    # Set up the development environment
+    _cw_setup_environment "$worktree_path"
+
     cd "$worktree_path" || return 1
-    echo ""
     gum style --foreground 2 "Starting Claude Code..."
-    claude --dangerously-skip-permissions
+    if [[ -n "$initial_context" ]]; then
+      claude --dangerously-skip-permissions "$initial_context"
+    else
+      claude --dangerously-skip-permissions
+    fi
   else
     gum style --foreground 1 "Failed to create worktree"
     return 1
@@ -528,15 +730,15 @@ _cw_issue() {
     issue_num=$(echo "$selection" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
   fi
 
-  # Fetch issue details
-  local issue_data=$(gh issue view "$issue_num" --json number,title 2>/dev/null)
+  # Fetch issue details including body
+  # Use --jq to extract fields directly, which handles control characters better
+  local title=$(gh issue view "$issue_num" --json title --jq '.title' 2>/dev/null)
+  local body=$(gh issue view "$issue_num" --json body --jq '.body // ""' 2>/dev/null)
 
-  if [[ -z "$issue_data" ]]; then
+  if [[ -z "$title" ]]; then
     gum style --foreground 1 "Could not fetch issue #$issue_num"
     return 1
   fi
-
-  local title=$(echo "$issue_data" | jq -r '.title')
 
   # Generate suggested branch name
   local sanitized=$(_cw_sanitize_branch_name "$title" | cut -c1-40)
@@ -555,7 +757,16 @@ _cw_issue() {
     return 0
   fi
 
-  _cw_create_worktree "$branch_name"
+  # Prepare context to pass to Claude
+  local claude_context="I'm working on GitHub issue #${issue_num}.
+
+Title: ${title}
+
+${body}
+
+Ask clarifying questions about the intended work if you can think of any."
+
+  _cw_create_worktree "$branch_name" "$claude_context"
 }
 
 # ============================================================================
@@ -638,12 +849,47 @@ _cw_pr() {
     fi
   fi
 
-  # Fetch the PR branch and create worktree with proper tracking
-  gum spin --spinner dot --title "Fetching PR branch..." -- git fetch origin "pull/${pr_num}/head:${head_ref}" 2>/dev/null || \
-    git fetch origin "${head_ref}:${head_ref}" 2>/dev/null
+  # Check if the head_ref branch is already used by another worktree
+  local existing_worktree=$(git worktree list --porcelain | grep -A2 "^worktree " | grep -B1 "branch refs/heads/${head_ref}$" | head -1 | sed 's/^worktree //')
 
-  # Create worktree with the PR branch
-  gum spin --spinner dot --title "Creating worktree..." -- git worktree add "$worktree_path" "$head_ref"
+  if [[ -n "$existing_worktree" ]]; then
+    echo ""
+    gum style --foreground 3 "Branch '${head_ref}' is already checked out in another worktree:"
+    echo "  $existing_worktree"
+    echo ""
+
+    if gum confirm "Switch to existing worktree instead?"; then
+      cd "$existing_worktree" || return 1
+      gum style --foreground 2 "Starting Claude Code for PR review..."
+      claude --dangerously-skip-permissions
+      return 0
+    else
+      gum style --foreground 6 "Creating detached worktree for PR review..."
+
+      # Fetch the PR and create a detached worktree
+      if ! gum spin --spinner dot --title "Fetching PR..." -- git fetch origin "pull/${pr_num}/head" 2>/dev/null; then
+        gum style --foreground 1 "Failed to fetch PR"
+        return 1
+      fi
+
+      # Create detached worktree at FETCH_HEAD
+      if ! gum spin --spinner dot --title "Creating worktree..." -- git worktree add --detach "$worktree_path" FETCH_HEAD; then
+        gum style --foreground 1 "Failed to create worktree"
+        return 1
+      fi
+    fi
+  else
+    # Normal path: branch not in use, create worktree with it
+    # Fetch the PR branch and create worktree with proper tracking
+    gum spin --spinner dot --title "Fetching PR branch..." -- git fetch origin "pull/${pr_num}/head:${head_ref}" 2>/dev/null || \
+      git fetch origin "${head_ref}:${head_ref}" 2>/dev/null
+
+    # Create worktree with the PR branch
+    if ! gum spin --spinner dot --title "Creating worktree..." -- git worktree add "$worktree_path" "$head_ref"; then
+      gum style --foreground 1 "Failed to create worktree"
+      return 1
+    fi
+  fi
 
   cd "$worktree_path" || return 1
 
@@ -654,7 +900,11 @@ _cw_pr() {
   gum style --border rounded --padding "0 1" --border-foreground 6 \
     "Changes vs $base_ref"
 
-  git diff --stat "origin/${base_ref}...HEAD" 2>/dev/null || git diff --stat HEAD~5...HEAD 2>/dev/null
+  # Disable pager for diff output to avoid hanging
+  git --no-pager diff --stat "origin/${base_ref}...HEAD" 2>/dev/null || git --no-pager diff --stat HEAD~5...HEAD 2>/dev/null
+
+  # Set up the development environment (install dependencies)
+  _cw_setup_environment "$worktree_path"
 
   echo ""
   gum style --foreground 2 "Starting Claude Code for PR review..."
