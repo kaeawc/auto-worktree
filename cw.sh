@@ -615,49 +615,63 @@ _cw_list() {
     echo -e "$output"
   fi
 
-  # Prompt to clean up merged worktrees first (priority over stale)
+  # Collect all worktrees to clean up (merged + stale)
+  local -a cleanup_wt_paths=()
+  local -a cleanup_wt_branches=()
+  local -a cleanup_wt_reasons=()
+
+  # Add merged worktrees
   if [[ ${#merged_wt_paths} -gt 0 ]]; then
     local i=1
     while [[ $i -le ${#merged_wt_paths} ]]; do
-      local m_path="${merged_wt_paths[$i]}"
-      local m_branch="${merged_wt_branches[$i]}"
-      local m_reason="${merged_wt_issues[$i]}"
-
-      echo ""
-      gum style --foreground 5 "Linked $m_reason was merged! Worktree can be cleaned up: $(basename "$m_path") ($m_branch)"
-
-      if gum confirm "Clean up this worktree?"; then
-        gum spin --spinner dot --title "Removing worktree..." -- git worktree remove --force "$m_path"
-        gum style --foreground 2 "Worktree removed."
-
-        if git show-ref --verify --quiet "refs/heads/${m_branch}"; then
-          if gum confirm "Also delete branch '$m_branch'?"; then
-            git branch -D "$m_branch" 2>/dev/null
-            gum style --foreground 2 "Branch deleted."
-          fi
-        fi
-      fi
+      cleanup_wt_paths+=("${merged_wt_paths[$i]}")
+      cleanup_wt_branches+=("${merged_wt_branches[$i]}")
+      cleanup_wt_reasons+=("merged (${merged_wt_issues[$i]})")
       ((i++))
     done
-    return 0
   fi
 
-  # Prompt to clean up stale worktree (only if no merged worktrees)
+  # Add stale worktree
   if [[ -n "$oldest_wt_path" ]]; then
     local days=$((oldest_age / one_day))
+    cleanup_wt_paths+=("$oldest_wt_path")
+    cleanup_wt_branches+=("$oldest_wt_branch")
+    cleanup_wt_reasons+=("stale (${days}d old)")
+  fi
+
+  # Prompt for batch cleanup
+  if [[ ${#cleanup_wt_paths} -gt 0 ]]; then
     echo ""
-    gum style --foreground 1 "Stale worktree detected (${days}d old): $(basename "$oldest_wt_path") ($oldest_wt_branch)"
+    gum style --foreground 5 "Worktrees that can be cleaned up:"
+    echo ""
 
-    if gum confirm "Clean up this worktree?"; then
-      gum spin --spinner dot --title "Removing worktree..." -- git worktree remove --force "$oldest_wt_path"
-      gum style --foreground 2 "Worktree removed."
+    local i=1
+    while [[ $i -le ${#cleanup_wt_paths} ]]; do
+      local c_path="${cleanup_wt_paths[$i]}"
+      local c_branch="${cleanup_wt_branches[$i]}"
+      local c_reason="${cleanup_wt_reasons[$i]}"
+      echo "  • $(basename "$c_path") ($c_branch) - $c_reason"
+      ((i++))
+    done
 
-      if git show-ref --verify --quiet "refs/heads/${oldest_wt_branch}"; then
-        if gum confirm "Also delete branch '$oldest_wt_branch'?"; then
-          git branch -D "$oldest_wt_branch" 2>/dev/null
+    echo ""
+    if gum confirm "Clean up all these worktrees and delete their branches?"; then
+      local i=1
+      while [[ $i -le ${#cleanup_wt_paths} ]]; do
+        local c_path="${cleanup_wt_paths[$i]}"
+        local c_branch="${cleanup_wt_branches[$i]}"
+
+        echo ""
+        gum spin --spinner dot --title "Removing $(basename "$c_path")..." -- git worktree remove --force "$c_path"
+        gum style --foreground 2 "Worktree removed."
+
+        if git show-ref --verify --quiet "refs/heads/${c_branch}"; then
+          git branch -D "$c_branch" 2>/dev/null
           gum style --foreground 2 "Branch deleted."
         fi
-      fi
+
+        ((i++))
+      done
     fi
   fi
 }
@@ -760,7 +774,7 @@ _cw_issue() {
   local suggested="work/${issue_num}-${sanitized}"
 
   echo ""
-  gum style --border rounded --padding "0 1" --border-foreground 5 \
+  gum style --border rounded --padding "0 1" --border-foreground 5 -- \
     "Issue #${issue_num}" \
     "$title"
 
@@ -839,7 +853,7 @@ _cw_pr() {
   local author=$(echo "$pr_data" | jq -r '.author.login')
 
   echo ""
-  gum style --border rounded --padding "0 1" --border-foreground 5 \
+  gum style --border rounded --padding "0 1" --border-foreground 5 -- \
     "PR #${pr_num} by @${author}" \
     "$title" \
     "" \
