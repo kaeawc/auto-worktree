@@ -74,7 +74,7 @@ pause
 # User "selects" New worktree - show the branch input
 echo ""
 echo -n "Branch name (leave blank for random): "
-pause
+pause 0.5
 echo ""  # User presses enter
 pause
 
