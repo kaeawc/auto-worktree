@@ -214,7 +214,9 @@ _cw_setup_environment() {
     # Check packageManager field in package.json
     if command -v jq &> /dev/null; then
       local pkg_mgr_field=$(jq -r '.packageManager // ""' "$worktree_path/package.json" 2>/dev/null)
-      if [[ "$pkg_mgr_field" == pnpm* ]]; then
+      if [[ "$pkg_mgr_field" == bun* ]]; then
+        pkg_manager="bun"
+      elif [[ "$pkg_mgr_field" == pnpm* ]]; then
         pkg_manager="pnpm"
       elif [[ "$pkg_mgr_field" == yarn* ]]; then
         pkg_manager="yarn"
@@ -223,7 +225,9 @@ _cw_setup_environment() {
 
     # Check for lock files if packageManager field not found
     if [[ "$pkg_manager" == "npm" ]]; then
-      if [[ -f "$worktree_path/pnpm-lock.yaml" ]]; then
+      if [[ -f "$worktree_path/bun.lockb" ]]; then
+        pkg_manager="bun"
+      elif [[ -f "$worktree_path/pnpm-lock.yaml" ]]; then
         pkg_manager="pnpm"
       elif [[ -f "$worktree_path/yarn.lock" ]]; then
         pkg_manager="yarn"
@@ -232,6 +236,17 @@ _cw_setup_environment() {
 
     # Run the appropriate package manager
     case "$pkg_manager" in
+      bun)
+        if command -v bun &> /dev/null; then
+          if gum spin --spinner dot --title "Running bun install..." -- bun install --cwd "$worktree_path"; then
+            gum style --foreground 2 "✓ Dependencies installed (bun)"
+          else
+            gum style --foreground 3 "⚠ bun install had issues (continuing anyway)"
+          fi
+        else
+          gum style --foreground 3 "⚠ bun not found, skipping dependency installation"
+        fi
+        ;;
       pnpm)
         if command -v pnpm &> /dev/null; then
           if gum spin --spinner dot --title "Running pnpm install..." -- pnpm install --dir "$worktree_path" --silent; then
