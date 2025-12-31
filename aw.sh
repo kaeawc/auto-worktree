@@ -41,6 +41,26 @@ _aw_check_deps() {
 }
 
 # ============================================================================
+# AI Command Resolution
+# ============================================================================
+
+_resolve_ai_command() {
+  if ! command -v claude &> /dev/null; then
+    gum style --foreground 1 --bold "Error: claude command not found"
+    echo ""
+    echo "Claude Code CLI is required but not installed."
+    echo ""
+    echo "Install it with one of the following methods:"
+    echo "  • macOS:   brew install claude"
+    echo "  • npm:     npm install -g @anthropic-ai/claude-code"
+    echo ""
+    echo "For more information, visit: https://github.com/anthropics/claude-code"
+    return 1
+  fi
+  return 0
+}
+
+# ============================================================================
 # Word lists for random names
 # ============================================================================
 
@@ -512,6 +532,8 @@ _aw_create_worktree() {
     # Set terminal title to branch name
     printf '\033]0;%s\007' "$branch_name"
 
+    _resolve_ai_command || return 1
+
     gum style --foreground 2 "Starting Claude Code..."
     if [[ -n "$initial_context" ]]; then
       claude --dangerously-skip-permissions "$initial_context"
@@ -880,6 +902,9 @@ _aw_pr() {
       cd "$worktree_path" || return 1
       # Set terminal title for GitHub PR
       printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
+
+      _resolve_ai_command || return 1
+
       gum style --foreground 2 "Starting Claude Code..."
       claude --dangerously-skip-permissions
       return 0
@@ -901,6 +926,9 @@ _aw_pr() {
       cd "$existing_worktree" || return 1
       # Set terminal title for GitHub PR
       printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
+
+      _resolve_ai_command || return 1
+
       gum style --foreground 2 "Starting Claude Code for PR review..."
       claude --dangerously-skip-permissions
       return 0
@@ -949,6 +977,8 @@ _aw_pr() {
 
   # Set terminal title for GitHub PR
   printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
+
+  _resolve_ai_command || return 1
 
   echo ""
   gum style --foreground 2 "Starting Claude Code for PR review..."
@@ -1064,6 +1094,8 @@ _aw_resume() {
   # Set terminal title to the branch name
   local branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
   printf '\033]0;%s\007' "$branch_name"
+
+  _resolve_ai_command || return 1
 
   claude --dangerously-skip-permissions --continue
 }
