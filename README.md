@@ -1,6 +1,6 @@
-# claude-worktree
+# auto-worktree
 
-A bash tool for safely running Claude Code in isolated git worktrees. Create separate workspaces for each task, issue, or PR review - keeping your main branch pristine.
+A bash tool for safely running AI agents in isolated git worktrees. Create separate workspaces for each task, issue, or PR review - keeping your main branch pristine.
 
 ![Demo](demo.gif)
 
@@ -30,24 +30,24 @@ brew install gum gh jq
 Add to your `~/.zshrc`:
 
 ```bash
-source /path/to/claude-worktree/cw.sh
+source /path/to/auto-worktree/aw.sh
 ```
 
 ## Usage
 
 ```bash
-claude-worktree              # Interactive menu
-claude-worktree new          # Create new worktree
-claude-worktree issue [num]  # Work on a GitHub issue
-claude-worktree pr [num]     # Review a GitHub PR
-claude-worktree list         # List existing worktrees
-claude-worktree help         # Show help
+auto-worktree              # Interactive menu
+auto-worktree new          # Create new worktree
+auto-worktree issue [num]  # Work on a GitHub issue
+auto-worktree pr [num]     # Review a GitHub PR
+auto-worktree list         # List existing worktrees
+auto-worktree help         # Show help
 ```
 
 ### Create a New Worktree
 
 ```bash
-claude-worktree new
+auto-worktree new
 ```
 
 Enter a branch name or leave blank for a random name like `work/mint-code-flux`.
@@ -55,8 +55,8 @@ Enter a branch name or leave blank for a random name like `work/mint-code-flux`.
 ### Work on a GitHub Issue
 
 ```bash
-claude-worktree issue        # Select from open issues
-claude-worktree issue 42     # Work on issue #42 directly
+auto-worktree issue        # Select from open issues
+auto-worktree issue 42     # Work on issue #42 directly
 ```
 
 Creates a branch like `work/42-fix-login-bug` and opens Claude Code.
@@ -64,8 +64,8 @@ Creates a branch like `work/42-fix-login-bug` and opens Claude Code.
 ### Review a Pull Request
 
 ```bash
-claude-worktree pr           # Select from open PRs
-claude-worktree pr 123       # Review PR #123 directly
+auto-worktree pr           # Select from open PRs
+auto-worktree pr 123       # Review PR #123 directly
 ```
 
 Checks out the PR in a new worktree and shows the diff stats.
@@ -73,7 +73,7 @@ Checks out the PR in a new worktree and shows the diff stats.
 ### List Worktrees
 
 ```bash
-claude-worktree list
+auto-worktree list
 ```
 
 Shows all worktrees with:
@@ -93,13 +93,13 @@ Shows all worktrees with:
 ```bash
 # Start work on an issue
 cd my-project
-claude-worktree issue 42
+auto-worktree issue 42
 
 # Claude Code opens in ~/worktrees/my-project/work-42-add-feature/
 # Make changes, commit, push, create PR
 
 # Later, check for cleanup
-claude-worktree list
+auto-worktree list
 # Shows "[merged #42]" indicator, prompts to clean up
 ```
 
@@ -108,9 +108,9 @@ claude-worktree list
 The tool includes full zsh completion:
 
 ```bash
-claude-worktree <TAB>        # Shows: new, issue, pr, list, help
-claude-worktree issue <TAB>  # Shows open issues from GitHub
-claude-worktree pr <TAB>     # Shows open PRs from GitHub
+auto-worktree <TAB>        # Shows: new, issue, pr, list, help
+auto-worktree issue <TAB>  # Shows open issues from GitHub
+auto-worktree pr <TAB>     # Shows open PRs from GitHub
 ```
 
 ## Why Worktrees?

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Simulated interactive demo for claude-worktree
+# Simulated interactive demo for auto-worktree
 # Shows the interactive flow without requiring full TTY
 
 set -e
@@ -13,7 +13,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Source for access to word lists and functions
 compdef() { :; }
-source "$PROJECT_DIR/cw.sh"
+source "$PROJECT_DIR/aw.sh"
 
 # Helper to type command with delay
 type_cmd() {
@@ -31,7 +31,7 @@ pause() {
 
 # Cleanup function
 cleanup_demo_worktrees() {
-    local worktree_base="$HOME/worktrees/claude-worktree"
+    local worktree_base="$HOME/worktrees/auto-worktree"
     if [[ -d "$worktree_base" ]]; then
         for wt in "$worktree_base"/*; do
             if [[ -d "$wt" ]]; then
@@ -53,11 +53,11 @@ pause
 
 # Show the command being typed
 echo -n "❯ "
-type_cmd "claude-worktree"
+type_cmd "auto-worktree"
 pause
 
 # Show status message
-gum style --foreground 240 "No additional worktrees for claude-worktree"
+gum style --foreground 240 "No additional worktrees for auto-worktree"
 echo ""
 pause
 
@@ -84,7 +84,7 @@ random_word1="${_WORKTREE_WORDS[$((RANDOM % ${#_WORKTREE_WORDS[@]} + 1))]}"
 random_word2="${_WORKTREE_WORDS[$((RANDOM % ${#_WORKTREE_WORDS[@]} + 1))]}"
 branch_name="work/$random_color-$random_word1-$random_word2"
 worktree_name=$(echo "$branch_name" | sed 's/\//-/g')
-worktree_path="$HOME/worktrees/claude-worktree/$worktree_name"
+worktree_path="$HOME/worktrees/auto-worktree/$worktree_name"
 
 gum style --foreground 6 "Generated: $branch_name"
 echo ""

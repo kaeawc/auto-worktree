@@ -1,5 +1,5 @@
 #!/bin/bash
-# Demo recording script for claude-worktree
+# Demo recording script for auto-worktree
 # Records with asciinema and converts to GIF with agg
 
 set -e
@@ -41,7 +41,7 @@ echo "Cleaning up demo worktrees..."
 
 # Clean up any worktrees created during demo
 cd "$PROJECT_DIR"
-worktree_base="$HOME/worktrees/claude-worktree"
+worktree_base="$HOME/worktrees/auto-worktree"
 if [[ -d "$worktree_base" ]]; then
     for wt in "$worktree_base"/*; do
         if [[ -d "$wt" ]]; then

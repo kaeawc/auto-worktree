@@ -1,5 +1,5 @@
 #!/usr/bin/expect -f
-# Expect script to automate interactive claude-worktree demo
+# Expect script to automate interactive auto-worktree demo
 
 set timeout 30
 
@@ -27,12 +27,12 @@ after 300
 
 # Show the command being typed
 send_user "❯ "
-type_slow "claude-worktree"
+type_slow "auto-worktree"
 send_user "\n"
 after 500
 
-# Start claude-worktree in interactive mode
-spawn bash -c "cd $project_dir && compdef() { :; } && source ./cw.sh && PATH=$script_dir:\$PATH claude-worktree"
+# Start auto-worktree in interactive mode
+spawn bash -c "cd $project_dir && compdef() { :; } && source ./aw.sh && PATH=$script_dir:\$PATH auto-worktree"
 
 # Capture output and selectively show it
 expect {
@@ -115,6 +115,6 @@ after 1000
 send_user "\n"
 
 # Cleanup
-exec bash -c "cd $project_dir && worktree_base=\$HOME/worktrees/claude-worktree; if \[\[ -d \"\$worktree_base\" \]\]; then for wt in \"\$worktree_base\"/*; do if \[\[ -d \"\$wt\" \]\]; then branch_name=\$(git -C \"\$wt\" branch --show-current 2>/dev/null || echo \"\"); git worktree remove --force \"\$wt\" 2>/dev/null || true; if \[\[ -n \"\$branch_name\" \]\]; then git branch -D \"\$branch_name\" 2>/dev/null || true; fi; fi; done; fi" 2>/dev/null
+exec bash -c "cd $project_dir && worktree_base=\$HOME/worktrees/auto-worktree; if \[\[ -d \"\$worktree_base\" \]\]; then for wt in \"\$worktree_base\"/*; do if \[\[ -d \"\$wt\" \]\]; then branch_name=\$(git -C \"\$wt\" branch --show-current 2>/dev/null || echo \"\"); git worktree remove --force \"\$wt\" 2>/dev/null || true; if \[\[ -n \"\$branch_name\" \]\]; then git branch -D \"\$branch_name\" 2>/dev/null || true; fi; fi; done; fi" 2>/dev/null
 
 exit 0

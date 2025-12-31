@@ -1,20 +1,20 @@
 #!/bin/bash
 
-# Source this file from ~/.zshrc to load the shell function `claude-worktree`
+# Source this file from ~/.zshrc to load the shell function `auto-worktree`
 #
 # Usage:
-#   claude-worktree              # Interactive menu
-#   claude-worktree new          # Create new worktree
-#   claude-worktree resume       # Resume existing worktree
-#   claude-worktree issue [num]  # Work on a GitHub issue
-#   claude-worktree pr [num]     # Review a GitHub PR
-#   claude-worktree list         # List existing worktrees
+#   auto-worktree              # Interactive menu
+#   auto-worktree new          # Create new worktree
+#   auto-worktree resume       # Resume existing worktree
+#   auto-worktree issue [num]  # Work on a GitHub issue
+#   auto-worktree pr [num]     # Review a GitHub PR
+#   auto-worktree list         # List existing worktrees
 
 # ============================================================================
 # Dependencies check
 # ============================================================================
 
-_cw_check_deps() {
+_aw_check_deps() {
   local missing=()
 
   if ! command -v gum &> /dev/null; then
@@ -151,7 +151,7 @@ _WORKTREE_COLORS=(
 # Helper functions
 # ============================================================================
 
-_cw_ensure_git_repo() {
+_aw_ensure_git_repo() {
   if ! git rev-parse --git-dir > /dev/null 2>&1; then
     gum style --foreground 1 "Error: Not in a git repository"
     return 1
@@ -159,13 +159,13 @@ _cw_ensure_git_repo() {
   return 0
 }
 
-_cw_get_repo_info() {
-  _CW_GIT_ROOT=$(git rev-parse --show-toplevel)
-  _CW_SOURCE_FOLDER=$(basename "$_CW_GIT_ROOT")
-  _CW_WORKTREE_BASE="$HOME/worktrees/$_CW_SOURCE_FOLDER"
+_aw_get_repo_info() {
+  _AW_GIT_ROOT=$(git rev-parse --show-toplevel)
+  _AW_SOURCE_FOLDER=$(basename "$_AW_GIT_ROOT")
+  _AW_WORKTREE_BASE="$HOME/worktrees/$_AW_SOURCE_FOLDER"
 }
 
-_cw_prune_worktrees() {
+_aw_prune_worktrees() {
   local count_before=$(git worktree list --porcelain 2>/dev/null | grep -c "^worktree " || echo 0)
   git worktree prune 2>/dev/null
   local count_after=$(git worktree list --porcelain 2>/dev/null | grep -c "^worktree " || echo 0)
@@ -176,7 +176,7 @@ _cw_prune_worktrees() {
   fi
 }
 
-_cw_generate_random_name() {
+_aw_generate_random_name() {
   # In zsh, arrays are 1-indexed, so we need to add 1 to the result of modulo
   local color_idx=$(( ($RANDOM % ${#_WORKTREE_COLORS[@]}) + 1 ))
   local word1_idx=$(( ($RANDOM % ${#_WORKTREE_WORDS[@]}) + 1 ))
@@ -188,11 +188,11 @@ _cw_generate_random_name() {
   echo "${color}-${word1}-${word2}"
 }
 
-_cw_sanitize_branch_name() {
+_aw_sanitize_branch_name() {
   echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//'
 }
 
-_cw_setup_environment() {
+_aw_setup_environment() {
   # Automatically set up the development environment based on detected project files
   local worktree_path="$1"
 
@@ -402,14 +402,14 @@ _cw_setup_environment() {
   return 0
 }
 
-_cw_extract_issue_number() {
+_aw_extract_issue_number() {
   # Extract issue number from branch name patterns like:
   # work/123-description, issue-123, 123-fix-something
   local branch="$1"
   echo "$branch" | grep -oE '(^|[^0-9])([0-9]+)' | head -1 | grep -oE '[0-9]+' | head -1
 }
 
-_cw_check_issue_merged() {
+_aw_check_issue_merged() {
   # Check if an issue or its linked PR was merged into main
   # Returns 0 if merged, 1 if not merged or error
   local issue_num="$1"
@@ -443,7 +443,7 @@ _cw_check_issue_merged() {
   return 1
 }
 
-_cw_check_branch_pr_merged() {
+_aw_check_branch_pr_merged() {
   # Check if the branch itself has a merged PR (regardless of issue linkage)
   # Returns 0 if merged, 1 if not
   local branch_name="$1"
@@ -462,13 +462,13 @@ _cw_check_branch_pr_merged() {
   return 1
 }
 
-_cw_create_worktree() {
+_aw_create_worktree() {
   local branch_name="$1"
   local initial_context="${2:-}"
-  local worktree_name=$(_cw_sanitize_branch_name "$branch_name")
-  local worktree_path="$_CW_WORKTREE_BASE/$worktree_name"
+  local worktree_name=$(_aw_sanitize_branch_name "$branch_name")
+  local worktree_path="$_AW_WORKTREE_BASE/$worktree_name"
 
-  mkdir -p "$_CW_WORKTREE_BASE"
+  mkdir -p "$_AW_WORKTREE_BASE"
 
   # Check if branch already exists
   local branch_exists=false
@@ -505,7 +505,7 @@ _cw_create_worktree() {
 
   if [[ "$worktree_cmd_success" == "true" ]]; then
     # Set up the development environment
-    _cw_setup_environment "$worktree_path"
+    _aw_setup_environment "$worktree_path"
 
     cd "$worktree_path" || return 1
 
@@ -528,16 +528,16 @@ _cw_create_worktree() {
 # List worktrees
 # ============================================================================
 
-_cw_list() {
-  _cw_ensure_git_repo || return 1
-  _cw_get_repo_info
-  _cw_prune_worktrees
+_aw_list() {
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
+  _aw_prune_worktrees
 
   local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
   local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
 
   if [[ $worktree_count -le 1 ]]; then
-    gum style --foreground 8 "No additional worktrees for $_CW_SOURCE_FOLDER"
+    gum style --foreground 8 "No additional worktrees for $_AW_SOURCE_FOLDER"
     return 0
   fi
 
@@ -557,7 +557,7 @@ _cw_list() {
   local output=""
 
   while IFS= read -r wt_path; do
-    [[ "$wt_path" == "$_CW_GIT_ROOT" ]] && continue
+    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
     [[ ! -d "$wt_path" ]] && continue
 
     local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
@@ -568,16 +568,16 @@ _cw_list() {
     fi
 
     # Check if this worktree is linked to a merged issue or has a merged PR
-    local issue_num=$(_cw_extract_issue_number "$wt_branch")
+    local issue_num=$(_aw_extract_issue_number "$wt_branch")
     local is_merged=false
     local merged_indicator=""
     local merge_reason=""
 
-    if [[ -n "$issue_num" ]] && _cw_check_issue_merged "$issue_num"; then
+    if [[ -n "$issue_num" ]] && _aw_check_issue_merged "$issue_num"; then
       is_merged=true
       merge_reason="issue #$issue_num"
       merged_indicator=" $(gum style --foreground 5 "[merged #$issue_num]")"
-    elif _cw_check_branch_pr_merged "$wt_branch"; then
+    elif _aw_check_branch_pr_merged "$wt_branch"; then
       is_merged=true
       merge_reason="PR"
       merged_indicator=" $(gum style --foreground 5 "[PR merged]")"
@@ -616,7 +616,7 @@ _cw_list() {
 
   if [[ -n "$output" ]]; then
     gum style --border rounded --padding "0 1" --border-foreground 4 \
-      "Worktrees for $_CW_SOURCE_FOLDER"
+      "Worktrees for $_AW_SOURCE_FOLDER"
     echo -e "$output"
   fi
 
@@ -685,16 +685,16 @@ _cw_list() {
 # New worktree
 # ============================================================================
 
-_cw_new() {
+_aw_new() {
   local skip_list="${1:-false}"
 
-  _cw_ensure_git_repo || return 1
-  _cw_get_repo_info
-  _cw_prune_worktrees
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
+  _aw_prune_worktrees
 
   # Show existing worktrees (unless called from menu which already showed them)
   if [[ "$skip_list" == "false" ]]; then
-    _cw_list
+    _aw_list
   fi
 
   echo ""
@@ -709,7 +709,7 @@ _cw_new() {
     local attempts=0
     local max_attempts=50
     while [[ $attempts -lt $max_attempts ]]; do
-      worktree_name="$(_cw_generate_random_name)"
+      worktree_name="$(_aw_generate_random_name)"
       branch_name="work/${worktree_name}"
 
       # Check if branch already exists
@@ -730,16 +730,16 @@ _cw_new() {
     branch_name="$branch_input"
   fi
 
-  _cw_create_worktree "$branch_name"
+  _aw_create_worktree "$branch_name"
 }
 
 # ============================================================================
 # Issue integration
 # ============================================================================
 
-_cw_issue() {
-  _cw_ensure_git_repo || return 1
-  _cw_get_repo_info
+_aw_issue() {
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
 
   local issue_num="${1:-}"
 
@@ -775,7 +775,7 @@ _cw_issue() {
   fi
 
   # Generate suggested branch name
-  local sanitized=$(_cw_sanitize_branch_name "$title" | cut -c1-40)
+  local sanitized=$(_aw_sanitize_branch_name "$title" | cut -c1-40)
   local suggested="work/${issue_num}-${sanitized}"
 
   echo ""
@@ -803,16 +803,16 @@ Ask clarifying questions about the intended work if you can think of any."
   # Set terminal title for GitHub issue
   printf '\033]0;GitHub Issue #%s - %s\007' "$issue_num" "$title"
 
-  _cw_create_worktree "$branch_name" "$claude_context"
+  _aw_create_worktree "$branch_name" "$claude_context"
 }
 
 # ============================================================================
 # PR review integration
 # ============================================================================
 
-_cw_pr() {
-  _cw_ensure_git_repo || return 1
-  _cw_get_repo_info
+_aw_pr() {
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
 
   local pr_num="${1:-}"
 
@@ -869,9 +869,9 @@ _cw_pr() {
 
   # Create worktree for the PR
   local worktree_name="pr-${pr_num}"
-  local worktree_path="$_CW_WORKTREE_BASE/$worktree_name"
+  local worktree_path="$_AW_WORKTREE_BASE/$worktree_name"
 
-  mkdir -p "$_CW_WORKTREE_BASE"
+  mkdir -p "$_AW_WORKTREE_BASE"
 
   # Check if worktree already exists
   if [[ -d "$worktree_path" ]]; then
@@ -945,7 +945,7 @@ _cw_pr() {
   git --no-pager diff --stat "origin/${base_ref}...HEAD" 2>/dev/null || git --no-pager diff --stat HEAD~5...HEAD 2>/dev/null
 
   # Set up the development environment (install dependencies)
-  _cw_setup_environment "$worktree_path"
+  _aw_setup_environment "$worktree_path"
 
   # Set terminal title for GitHub PR
   printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
@@ -959,16 +959,16 @@ _cw_pr() {
 # Resume worktree
 # ============================================================================
 
-_cw_resume() {
-  _cw_ensure_git_repo || return 1
-  _cw_get_repo_info
-  _cw_prune_worktrees
+_aw_resume() {
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
+  _aw_prune_worktrees
 
   local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
   local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
 
   if [[ $worktree_count -le 1 ]]; then
-    gum style --foreground 8 "No additional worktrees for $_CW_SOURCE_FOLDER"
+    gum style --foreground 8 "No additional worktrees for $_AW_SOURCE_FOLDER"
     return 0
   fi
 
@@ -981,7 +981,7 @@ _cw_resume() {
   local -a worktree_displays=()
 
   while IFS= read -r wt_path; do
-    [[ "$wt_path" == "$_CW_GIT_ROOT" ]] && continue
+    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
     [[ ! -d "$wt_path" ]] && continue
 
     local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
@@ -1011,13 +1011,13 @@ _cw_resume() {
   done <<< "$worktree_list"
 
   if [[ ${#worktree_paths[@]} -eq 0 ]]; then
-    gum style --foreground 8 "No additional worktrees for $_CW_SOURCE_FOLDER"
+    gum style --foreground 8 "No additional worktrees for $_AW_SOURCE_FOLDER"
     return 0
   fi
 
   echo ""
   gum style --border rounded --padding "0 1" --border-foreground 4 \
-    "Resume a worktree for $_CW_SOURCE_FOLDER"
+    "Resume a worktree for $_AW_SOURCE_FOLDER"
   echo ""
 
   # Create selection string from displays
@@ -1072,12 +1072,12 @@ _cw_resume() {
 # Main menu
 # ============================================================================
 
-_cw_menu() {
-  _cw_ensure_git_repo || return 1
-  _cw_get_repo_info
+_aw_menu() {
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
 
   # Show existing worktrees
-  _cw_list
+  _aw_list
 
   echo ""
 
@@ -1089,10 +1089,10 @@ _cw_menu() {
     "Cancel")
 
   case "$choice" in
-    "New worktree")    _cw_new true ;;
-    "Resume worktree") _cw_resume ;;
-    "Work on issue")   _cw_issue ;;
-    "Review PR")       _cw_pr ;;
+    "New worktree")    _aw_new true ;;
+    "Resume worktree") _aw_resume ;;
+    "Work on issue")   _aw_issue ;;
+    "Review PR")       _aw_pr ;;
     *)                 return 0 ;;
   esac
 }
@@ -1101,17 +1101,17 @@ _cw_menu() {
 # Main entry point
 # ============================================================================
 
-claude-worktree() {
-  _cw_check_deps || return 1
+auto-worktree() {
+  _aw_check_deps || return 1
 
   case "${1:-}" in
-    new)    shift; _cw_new "$@" ;;
-    issue)  shift; _cw_issue "$@" ;;
-    pr)     shift; _cw_pr "$@" ;;
-    resume) shift; _cw_resume ;;
-    list)   shift; _cw_list ;;
+    new)    shift; _aw_new "$@" ;;
+    issue)  shift; _aw_issue "$@" ;;
+    pr)     shift; _aw_pr "$@" ;;
+    resume) shift; _aw_resume ;;
+    list)   shift; _aw_list ;;
     help|--help|-h)
-      echo "Usage: claude-worktree [command] [args]"
+      echo "Usage: auto-worktree [command] [args]"
       echo ""
       echo "Commands:"
       echo "  new           Create a new worktree"
@@ -1122,10 +1122,10 @@ claude-worktree() {
       echo ""
       echo "Run without arguments for interactive menu."
       ;;
-    "")    _cw_menu ;;
+    "")    _aw_menu ;;
     *)
       gum style --foreground 1 "Unknown command: $1"
-      echo "Run 'claude-worktree help' for usage"
+      echo "Run 'auto-worktree help' for usage"
       return 1
       ;;
   esac
@@ -1135,7 +1135,7 @@ claude-worktree() {
 # Zsh completion
 # ============================================================================
 
-_claude_worktree() {
+_auto_worktree() {
   local -a commands
   commands=(
     'new:Create a new worktree'
@@ -1154,7 +1154,7 @@ _claude_worktree() {
 
   case $state in
     command)
-      _describe -t commands 'claude-worktree commands' commands
+      _describe -t commands 'auto-worktree commands' commands
       ;;
     args)
       case $words[1] in
@@ -1183,4 +1183,4 @@ _claude_worktree() {
   esac
 }
 
-compdef _claude_worktree claude-worktree
+compdef _auto_worktree auto-worktree
