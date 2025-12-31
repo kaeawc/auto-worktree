@@ -76,6 +76,7 @@ _install_ai_tool() {
   local choice=$(gum choose \
     "Install Claude Code (Anthropic)" \
     "Install Codex CLI (OpenAI)" \
+    "Install Gemini CLI (Google)" \
     "Skip - don't use an AI tool" \
     "Cancel")
 
@@ -99,6 +100,15 @@ _install_ai_tool() {
       echo ""
       return 1
       ;;
+    "Install Gemini CLI (Google)")
+      echo ""
+      gum style --foreground 6 "Install Gemini CLI with:"
+      echo "  • npm:     npm install -g @google/gemini-cli"
+      echo ""
+      echo "For more information, visit: https://github.com/google-gemini/gemini-cli"
+      echo ""
+      return 1
+      ;;
     "Skip - don't use an AI tool")
       AI_CMD="skip"
       AI_CMD_NAME="none"
@@ -113,8 +123,10 @@ _install_ai_tool() {
 _resolve_ai_command() {
   local claude_available=false
   local codex_available=false
+  local gemini_available=false
   local claude_path=""
   local codex_path=""
+  local gemini_path=""
 
   # Check which tools are available and get their full paths
   claude_path=$(command -v claude 2>/dev/null)
@@ -122,6 +134,9 @@ _resolve_ai_command() {
 
   codex_path=$(command -v codex 2>/dev/null)
   [[ -n "$codex_path" ]] && codex_available=true
+
+  gemini_path=$(command -v gemini 2>/dev/null)
+  [[ -n "$gemini_path" ]] && gemini_available=true
 
   # Check for saved preference first
   local saved_pref=$(_load_ai_preference)
@@ -144,6 +159,14 @@ _resolve_ai_command() {
           return 0
         fi
         ;;
+      gemini)
+        if [[ "$gemini_available" == true ]]; then
+          AI_CMD="$gemini_path --yolo"
+          AI_CMD_NAME="Gemini CLI"
+          AI_RESUME_CMD="$gemini_path --resume"
+          return 0
+        fi
+        ;;
       skip)
         AI_CMD="skip"
         AI_CMD_NAME="none"
@@ -154,16 +177,26 @@ _resolve_ai_command() {
     # Fall through to normal selection
   fi
 
-  # If both are available, let user choose
-  if [[ "$claude_available" == true ]] && [[ "$codex_available" == true ]]; then
+  # Count available tools
+  local available_count=0
+  [[ "$claude_available" == true ]] && ((available_count++))
+  [[ "$codex_available" == true ]] && ((available_count++))
+  [[ "$gemini_available" == true ]] && ((available_count++))
+
+  # If multiple tools are available, let user choose
+  if [[ $available_count -gt 1 ]]; then
     echo ""
     gum style --foreground 6 "Multiple AI coding assistants detected!"
     echo ""
 
-    local choice=$(gum choose \
-      "Claude Code (Anthropic)" \
-      "Codex CLI (OpenAI)" \
-      "Skip - don't use an AI tool")
+    # Build menu options dynamically
+    local options=()
+    [[ "$claude_available" == true ]] && options+=("Claude Code (Anthropic)")
+    [[ "$codex_available" == true ]] && options+=("Codex CLI (OpenAI)")
+    [[ "$gemini_available" == true ]] && options+=("Gemini CLI (Google)")
+    options+=("Skip - don't use an AI tool")
+
+    local choice=$(gum choose "${options[@]}")
 
     case "$choice" in
       "Claude Code (Anthropic)")
@@ -175,6 +208,11 @@ _resolve_ai_command() {
         AI_CMD="$codex_path --yolo"
         AI_CMD_NAME="Codex"
         AI_RESUME_CMD="$codex_path resume --last"
+        ;;
+      "Gemini CLI (Google)")
+        AI_CMD="$gemini_path --yolo"
+        AI_CMD_NAME="Gemini CLI"
+        AI_RESUME_CMD="$gemini_path --resume"
         ;;
       "Skip - don't use an AI tool")
         AI_CMD="skip"
@@ -197,6 +235,10 @@ _resolve_ai_command() {
         "Codex CLI (OpenAI)")
           _save_ai_preference "codex"
           gum style --foreground 2 "Saved Codex as default"
+          ;;
+        "Gemini CLI (Google)")
+          _save_ai_preference "gemini"
+          gum style --foreground 2 "Saved Gemini CLI as default"
           ;;
         "Skip - don't use an AI tool")
           _save_ai_preference "skip"
@@ -224,7 +266,14 @@ _resolve_ai_command() {
     return 0
   fi
 
-  # Neither tool available - show installation menu
+  if [[ "$gemini_available" == true ]]; then
+    AI_CMD="$gemini_path --yolo"
+    AI_CMD_NAME="Gemini CLI"
+    AI_RESUME_CMD="$gemini_path --resume"
+    return 0
+  fi
+
+  # No tools available - show installation menu
   _install_ai_tool
   return $?
 }
@@ -1037,14 +1086,54 @@ _aw_issue() {
       return 1
     fi
 
-    local selection=$(echo "$issues" | gum filter --placeholder "Type to filter issues...")
+    # Detect which issues have active worktrees
+    local active_issues=()
+    local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+    if [[ -n "$worktree_list" ]]; then
+      while IFS= read -r wt_path; do
+        if [[ -d "$wt_path" ]]; then
+          local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+          if [[ -n "$wt_branch" ]]; then
+            local wt_issue=$(_aw_extract_issue_number "$wt_branch")
+            if [[ -n "$wt_issue" ]]; then
+              active_issues+=("$wt_issue")
+            fi
+          fi
+        fi
+      done <<< "$worktree_list"
+    fi
+
+    # Add highlighting for issues with active worktrees
+    local highlighted_issues=""
+    while IFS= read -r issue_line; do
+      if [[ -n "$issue_line" ]]; then
+        # Extract issue number from the line
+        local line_issue=$(echo "$issue_line" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+        # Check if this issue has an active worktree
+        local is_active=false
+        for active in "${active_issues[@]}"; do
+          if [[ "$active" == "$line_issue" ]]; then
+            is_active=true
+            break
+          fi
+        done
+        # Add indicator if active
+        if [[ "$is_active" == "true" ]]; then
+          highlighted_issues+="$(echo "$issue_line" | sed 's/^#/● #/')"$'\n'
+        else
+          highlighted_issues+="$issue_line"$'\n'
+        fi
+      fi
+    done <<< "$issues"
+
+    local selection=$(echo "$highlighted_issues" | gum filter --placeholder "Type to filter issues... (● = active worktree)")
 
     if [[ -z "$selection" ]]; then
       gum style --foreground 3 "Cancelled"
       return 0
     fi
 
-    issue_num=$(echo "$selection" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+    issue_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
   fi
 
   # Fetch issue details including body
@@ -1055,6 +1144,53 @@ _aw_issue() {
   if [[ -z "$title" ]]; then
     gum style --foreground 1 "Could not fetch issue #$issue_num"
     return 1
+  fi
+
+  # Check if a worktree already exists for this issue
+  local existing_worktree=""
+  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+  if [[ -n "$worktree_list" ]]; then
+    while IFS= read -r wt_path; do
+      if [[ -d "$wt_path" ]]; then
+        local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [[ -n "$wt_branch" ]]; then
+          local wt_issue=$(_aw_extract_issue_number "$wt_branch")
+          if [[ "$wt_issue" == "$issue_num" ]]; then
+            existing_worktree="$wt_path"
+            break
+          fi
+        fi
+      fi
+    done <<< "$worktree_list"
+  fi
+
+  # If an active worktree exists for this issue, offer to resume it
+  if [[ -n "$existing_worktree" ]]; then
+    echo ""
+    gum style --foreground 3 "Active worktree found for issue #$issue_num:"
+    echo "  $existing_worktree"
+    echo ""
+
+    if gum confirm "Resume existing worktree?"; then
+      cd "$existing_worktree" || return 1
+
+      # Set terminal title for GitHub issue
+      printf '\033]0;GitHub Issue #%s - %s\007' "$issue_num" "$title"
+
+      _resolve_ai_command || return 1
+
+      if [[ "$AI_CMD" != "skip" ]]; then
+        gum style --foreground 2 "Starting $AI_CMD_NAME..."
+        $AI_CMD
+      else
+        gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
+      fi
+      return 0
+    else
+      echo ""
+      gum style --foreground 3 "Continuing to create new worktree..."
+      echo ""
+    fi
   fi
 
   # Generate suggested branch name
