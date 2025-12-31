@@ -1,0 +1,120 @@
+#!/usr/bin/expect -f
+# Expect script to automate interactive claude-worktree demo
+
+set timeout 30
+
+# Disable expect's diagnostic output (hides "spawn" messages)
+log_user 0
+
+# Get directories
+set script_dir [file dirname [file normalize $argv0]]
+set project_dir [file dirname $script_dir]
+
+# Set up environment
+set env(PATH) "$script_dir:$env(PATH)"
+
+# Helper to type slowly
+proc type_slow {text} {
+    foreach char [split $text ""] {
+        send_user -- $char
+        after 40
+    }
+}
+
+# Clear screen and show prompt
+send_user "\033\[H\033\[2J"
+after 300
+
+# Show the command being typed
+send_user "❯ "
+type_slow "claude-worktree"
+send_user "\n"
+after 500
+
+# Start claude-worktree in interactive mode
+spawn bash -c "cd $project_dir && compdef() { :; } && source ./cw.sh && PATH=$script_dir:\$PATH claude-worktree"
+
+# Capture output and selectively show it
+expect {
+    timeout {
+        send_user "\nTimeout waiting for menu\n"
+        exit 1
+    }
+    -re "(No additional worktrees.*)\r" {
+        # Show the "no worktrees" message
+        send_user "$expect_out(1,string)\n"
+        exp_continue
+    }
+    "Choose:" {
+        # The menu appeared, now show it and wait a bit
+        after 500
+        # Manually display a clean version of the menu
+        send_user "\n"
+        send_user "\033\[38;5;99mChoose:\033\[0m\n"
+        send_user "\033\[38;5;212m> New worktree\033\[0m\n"
+        send_user "  Resume worktree\n"
+        send_user "  Work on issue\n"
+        send_user "  Review PR\n"
+        send_user "  Cancel\n"
+        send_user "\n"
+        after 1500
+        # Press Enter to select "New worktree"
+        send "\r"
+    }
+}
+
+# Wait for the branch name input prompt and send empty input
+expect {
+    timeout {
+        send_user "\nTimeout waiting for input\n"
+        exit 1
+    }
+    eof {
+        # Process ended early, that's ok
+        send_user "\n"
+    }
+    -re "Branch name.*:" {
+        # Show the input prompt
+        send_user "\nBranch name (leave blank for random): "
+        after 800
+        # Press Enter to accept random name
+        send "\r"
+        exp_continue
+    }
+    -re "Generated: (work/\[a-z-\]+)" {
+        send_user "\n\033\[36mGenerated: $expect_out(1,string)\033\[0m\n"
+        exp_continue
+    }
+    -re "Creating worktree" {
+        send_user "\n"
+        exp_continue
+    }
+    -re "Path:.*\r" {
+        send_user $expect_out(buffer)
+        exp_continue
+    }
+    -re "Branch:.*\r" {
+        send_user $expect_out(buffer)
+        exp_continue
+    }
+    -re "Base:.*\r" {
+        send_user $expect_out(buffer)
+        exp_continue
+    }
+    -re "Starting Claude Code" {
+        send_user "\n🚀 Starting Claude Code...\n"
+        exp_continue
+    }
+    -re "Ready to code" {
+        send_user "✓ Ready to code!\n"
+        exp_continue
+    }
+}
+
+after 1000
+send_user "\n"
+
+# Cleanup
+exec bash -c "cd $project_dir && worktree_base=\$HOME/worktrees/claude-worktree; if \[\[ -d \"\$worktree_base\" \]\]; then for wt in \"\$worktree_base\"/*; do if \[\[ -d \"\$wt\" \]\]; then branch_name=\$(git -C \"\$wt\" branch --show-current 2>/dev/null || echo \"\"); git worktree remove --force \"\$wt\" 2>/dev/null || true; if \[\[ -n \"\$branch_name\" \]\]; then git branch -D \"\$branch_name\" 2>/dev/null || true; fi; fi; done; fi" 2>/dev/null
+
+exit 0
