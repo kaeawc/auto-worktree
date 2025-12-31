@@ -8,8 +8,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
-# Add mock claude to PATH
-export PATH="$SCRIPT_DIR:$PATH"
+# Don't mock claude - use the real thing
+# (comment kept for clarity)
 
 # Source for access to word lists and functions
 compdef() { :; }
@@ -19,14 +19,14 @@ source "$PROJECT_DIR/cw.sh"
 type_cmd() {
     for ((i=0; i<${#1}; i++)); do
         echo -n "${1:$i:1}"
-        sleep 0.04
+        sleep 0.01
     done
     echo ""
 }
 
 # Helper to show a pause
 pause() {
-    sleep "${1:-0.8}"
+    sleep "${1:-0.01}"
 }
 
 # Cleanup function
@@ -49,17 +49,17 @@ cleanup_demo_worktrees() {
 cleanup_demo_worktrees
 
 clear
-pause 0.3
+pause
 
 # Show the command being typed
 echo -n "❯ "
 type_cmd "claude-worktree"
-pause 0.5
+pause
 
 # Show status message
 gum style --foreground 240 "No additional worktrees for claude-worktree"
 echo ""
-pause 0.3
+pause
 
 # Show the interactive menu
 gum style --foreground 99 "Choose:"
@@ -69,14 +69,14 @@ echo "  Work on issue"
 echo "  Review PR"
 echo "  Cancel"
 echo ""
-pause 1.5
+pause
 
 # User "selects" New worktree - show the branch input
 echo ""
 echo -n "Branch name (leave blank for random): "
-pause 0.8
+pause
 echo ""  # User presses enter
-pause 0.3
+pause
 
 # Generate random branch name
 random_color="${_WORKTREE_COLORS[$((RANDOM % ${#_WORKTREE_COLORS[@]} + 1))]}"
@@ -88,7 +88,10 @@ worktree_path="$HOME/worktrees/claude-worktree/$worktree_name"
 
 gum style --foreground 6 "Generated: $branch_name"
 echo ""
-pause 0.5
+pause
+
+# Set terminal title to the branch name
+printf '\033]0;%s\007' "$branch_name"
 
 # Show worktree creation box
 gum style --border rounded --padding "0 1" --border-foreground 4 \
@@ -98,7 +101,7 @@ gum style --border rounded --padding "0 1" --border-foreground 4 \
   "Base:" \
   "main"
 echo ""
-pause 0.3
+pause
 
 # Actually create the worktree
 cd "$PROJECT_DIR"
@@ -106,22 +109,42 @@ git worktree add -b "$branch_name" "$worktree_path" main >/dev/null 2>&1
 
 # Show spinner effect
 echo -ne "\033[38;5;212m⠋\033[0m Creating worktree..."
-sleep 0.2
+pause
 echo -ne "\r\033[38;5;212m⠙\033[0m Creating worktree..."
-sleep 0.2
+pause
 echo -ne "\r\033[38;5;212m⠹\033[0m Creating worktree..."
-sleep 0.2
+pause
 echo -ne "\r\033[32m✓\033[0m Created worktree   "
 echo ""
-pause 0.5
+pause
 
-# Show mock Claude launch
+# Launch real Claude Code
 gum style --foreground 2 "Starting Claude Code..."
-pause 0.5
-claude
-pause 0.5
+pause
 
-# Clean up
-cleanup_demo_worktrees 2>/dev/null || true
+# Change to the worktree directory and launch Claude
+cd "$worktree_path"
 
+# Capture PIDs of any existing Claude processes before we launch
+EXISTING_CLAUDE_PIDS=$(pgrep claude 2>/dev/null || echo "")
+
+# Spawn a background process to interrupt only NEW Claude processes after 3 seconds
+(
+  sleep 3
+  # Get all current Claude PIDs
+  ALL_CLAUDE_PIDS=$(pgrep claude 2>/dev/null || echo "")
+
+  # Kill only the Claude processes that weren't running before
+  for pid in $ALL_CLAUDE_PIDS; do
+    if ! echo "$EXISTING_CLAUDE_PIDS" | grep -qw "$pid"; then
+      kill -INT $pid 2>/dev/null || true
+    fi
+  done
+) &
+
+# Launch Claude in foreground - will be interrupted by background process after 3s
+claude --dangerously-skip-permissions 2>&1 || true
+
+# End the demo
+pause
 echo ""

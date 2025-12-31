@@ -25,6 +25,7 @@ asciinema rec "$SCRIPT_DIR/demo.cast" \
     --overwrite \
     --cols 80 \
     --rows 24 \
+    --idle-time-limit 1 \
     --command "bash $SCRIPT_DIR/demo-script.sh"
 
 echo "Converting to GIF..."
@@ -33,7 +34,8 @@ echo "Converting to GIF..."
 agg "$SCRIPT_DIR/demo.cast" "$PROJECT_DIR/demo.gif" \
     --font-size 16 \
     --speed 1.2 \
-    --theme monokai
+    --theme monokai \
+    --last-frame-duration 0.5
 
 echo "Cleaning up demo worktrees..."
 

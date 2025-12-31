@@ -1,8 +1,0 @@
-#!/bin/bash
-# Mock claude command for demo purposes
-# Just prints a message instead of launching Claude Code
-
-echo "🚀 Starting Claude Code..."
-sleep 0.5
-echo "✓ Ready to code!"
-exit 0

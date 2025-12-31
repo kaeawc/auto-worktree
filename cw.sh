@@ -508,6 +508,10 @@ _cw_create_worktree() {
     _cw_setup_environment "$worktree_path"
 
     cd "$worktree_path" || return 1
+
+    # Set terminal title to branch name
+    printf '\033]0;%s\007' "$branch_name"
+
     gum style --foreground 2 "Starting Claude Code..."
     if [[ -n "$initial_context" ]]; then
       claude --dangerously-skip-permissions "$initial_context"
@@ -796,6 +800,9 @@ ${body}
 
 Ask clarifying questions about the intended work if you can think of any."
 
+  # Set terminal title for GitHub issue
+  printf '\033]0;GitHub Issue #%s - %s\007' "$issue_num" "$title"
+
   _cw_create_worktree "$branch_name" "$claude_context"
 }
 
@@ -871,6 +878,8 @@ _cw_pr() {
     gum style --foreground 3 "Worktree already exists at $worktree_path"
     if gum confirm "Switch to existing worktree?"; then
       cd "$worktree_path" || return 1
+      # Set terminal title for GitHub PR
+      printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
       gum style --foreground 2 "Starting Claude Code..."
       claude --dangerously-skip-permissions
       return 0
@@ -890,6 +899,8 @@ _cw_pr() {
 
     if gum confirm "Switch to existing worktree instead?"; then
       cd "$existing_worktree" || return 1
+      # Set terminal title for GitHub PR
+      printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
       gum style --foreground 2 "Starting Claude Code for PR review..."
       claude --dangerously-skip-permissions
       return 0
@@ -935,6 +946,9 @@ _cw_pr() {
 
   # Set up the development environment (install dependencies)
   _cw_setup_environment "$worktree_path"
+
+  # Set terminal title for GitHub PR
+  printf '\033]0;GitHub PR #%s - %s\007' "$pr_num" "$title"
 
   echo ""
   gum style --foreground 2 "Starting Claude Code for PR review..."
@@ -1046,6 +1060,11 @@ _cw_resume() {
   echo ""
 
   cd "$selected_path" || return 1
+
+  # Set terminal title to the branch name
+  local branch_name=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+  printf '\033]0;%s\007' "$branch_name"
+
   claude --dangerously-skip-permissions --continue
 }
 
