@@ -463,6 +463,35 @@ _aw_check_issue_merged() {
   return 1
 }
 
+_aw_check_issue_closed() {
+  # Check if an issue is closed (regardless of merge/PR status)
+  # Returns 0 if closed, 1 if open or error
+  # Sets _AW_ISSUE_HAS_PR=true if there's an open PR for this issue
+  local issue_num="$1"
+
+  if [[ -z "$issue_num" ]]; then
+    return 1
+  fi
+
+  # Check if issue is closed
+  local issue_state=$(gh issue view "$issue_num" --json state --jq '.state' 2>/dev/null)
+
+  if [[ "$issue_state" != "CLOSED" ]]; then
+    return 1
+  fi
+
+  # Check if there's an open PR that references this issue
+  local open_prs=$(gh pr list --state open --search "closes #$issue_num OR fixes #$issue_num OR resolves #$issue_num" --json number --jq 'length' 2>/dev/null)
+
+  if [[ "$open_prs" -gt 0 ]] 2>/dev/null; then
+    _AW_ISSUE_HAS_PR=true
+  else
+    _AW_ISSUE_HAS_PR=false
+  fi
+
+  return 0
+}
+
 _aw_check_branch_pr_merged() {
   # Check if the branch itself has a merged PR (regardless of issue linkage)
   # Returns 0 if merged, 1 if not
@@ -476,6 +505,49 @@ _aw_check_branch_pr_merged() {
   local pr_state=$(gh pr view "$branch_name" --json state,mergedAt --jq '.state' 2>/dev/null)
 
   if [[ "$pr_state" == "MERGED" ]]; then
+    return 0
+  fi
+
+  return 1
+}
+
+_aw_has_unpushed_commits() {
+  # Check if a worktree has unpushed commits
+  # Returns 0 if there are unpushed commits, 1 if not
+  # Sets _AW_UNPUSHED_COUNT to the number of unpushed commits
+  local wt_path="$1"
+
+  if [[ -z "$wt_path" ]] || [[ ! -d "$wt_path" ]]; then
+    return 1
+  fi
+
+  # Get the current branch
+  local branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null)
+
+  if [[ -z "$branch" ]] || [[ "$branch" == "HEAD" ]]; then
+    # Detached HEAD state, no upstream to compare
+    return 1
+  fi
+
+  # Get the upstream branch
+  local upstream=$(git -C "$wt_path" rev-parse --abbrev-ref --symbolic-full-name @{u} 2>/dev/null)
+
+  if [[ -z "$upstream" ]]; then
+    # No upstream configured - check if there are any commits at all
+    local commit_count=$(git -C "$wt_path" rev-list --count HEAD 2>/dev/null)
+    if [[ "$commit_count" -gt 0 ]] 2>/dev/null; then
+      _AW_UNPUSHED_COUNT=$commit_count
+      return 0
+    else
+      return 1
+    fi
+  fi
+
+  # Count commits ahead of upstream
+  local ahead=$(git -C "$wt_path" rev-list --count @{u}..HEAD 2>/dev/null)
+
+  if [[ "$ahead" -gt 0 ]] 2>/dev/null; then
+    _AW_UNPUSHED_COUNT=$ahead
     return 0
   fi
 
@@ -603,6 +675,22 @@ _aw_list() {
       is_merged=true
       merge_reason="PR"
       merged_indicator=" $(gum style --foreground 5 "[PR merged]")"
+    elif [[ -n "$issue_num" ]] && _aw_check_issue_closed "$issue_num"; then
+      # Issue is closed but no PR (either open or merged)
+      if [[ "$_AW_ISSUE_HAS_PR" == "false" ]]; then
+        # Check for unpushed commits
+        if _aw_has_unpushed_commits "$wt_path"; then
+          # Has unpushed work - mark as closed but with warning
+          is_merged=true
+          merge_reason="issue #$issue_num closed (⚠ $_AW_UNPUSHED_COUNT unpushed)"
+          merged_indicator=" $(gum style --foreground 3 "[closed #$issue_num ⚠]")"
+        else
+          # No unpushed work - safe to clean up
+          is_merged=true
+          merge_reason="issue #$issue_num closed"
+          merged_indicator=" $(gum style --foreground 5 "[closed #$issue_num]")"
+        fi
+      fi
     fi
 
     if [[ "$is_merged" == "true" ]]; then
