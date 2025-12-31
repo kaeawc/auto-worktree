@@ -124,11 +124,19 @@ _resolve_ai_command() {
   local claude_available=false
   local codex_available=false
   local gemini_available=false
+  local claude_path=""
+  local codex_path=""
+  local gemini_path=""
 
-  # Check which tools are available
-  command -v claude &> /dev/null && claude_available=true
-  command -v codex &> /dev/null && codex_available=true
-  command -v gemini &> /dev/null && gemini_available=true
+  # Check which tools are available and get their full paths
+  claude_path=$(command -v claude 2>/dev/null)
+  [[ -n "$claude_path" ]] && claude_available=true
+
+  codex_path=$(command -v codex 2>/dev/null)
+  [[ -n "$codex_path" ]] && codex_available=true
+
+  gemini_path=$(command -v gemini 2>/dev/null)
+  [[ -n "$gemini_path" ]] && gemini_available=true
 
   # Check for saved preference first
   local saved_pref=$(_load_ai_preference)
@@ -137,25 +145,25 @@ _resolve_ai_command() {
     case "$saved_pref" in
       claude)
         if [[ "$claude_available" == true ]]; then
-          AI_CMD="claude --dangerously-skip-permissions"
+          AI_CMD="$claude_path --dangerously-skip-permissions"
           AI_CMD_NAME="Claude Code"
-          AI_RESUME_CMD="claude --dangerously-skip-permissions --continue"
+          AI_RESUME_CMD="$claude_path --dangerously-skip-permissions --continue"
           return 0
         fi
         ;;
       codex)
         if [[ "$codex_available" == true ]]; then
-          AI_CMD="codex --yolo"
+          AI_CMD="$codex_path --yolo"
           AI_CMD_NAME="Codex"
-          AI_RESUME_CMD="codex resume --last"
+          AI_RESUME_CMD="$codex_path resume --last"
           return 0
         fi
         ;;
       gemini)
         if [[ "$gemini_available" == true ]]; then
-          AI_CMD="gemini --yolo"
+          AI_CMD="$gemini_path --yolo"
           AI_CMD_NAME="Gemini CLI"
-          AI_RESUME_CMD="gemini --resume"
+          AI_RESUME_CMD="$gemini_path --resume"
           return 0
         fi
         ;;
@@ -192,19 +200,19 @@ _resolve_ai_command() {
 
     case "$choice" in
       "Claude Code (Anthropic)")
-        AI_CMD="claude --dangerously-skip-permissions"
+        AI_CMD="$claude_path --dangerously-skip-permissions"
         AI_CMD_NAME="Claude Code"
-        AI_RESUME_CMD="claude --dangerously-skip-permissions --continue"
+        AI_RESUME_CMD="$claude_path --dangerously-skip-permissions --continue"
         ;;
       "Codex CLI (OpenAI)")
-        AI_CMD="codex --yolo"
+        AI_CMD="$codex_path --yolo"
         AI_CMD_NAME="Codex"
-        AI_RESUME_CMD="codex resume --last"
+        AI_RESUME_CMD="$codex_path resume --last"
         ;;
       "Gemini CLI (Google)")
-        AI_CMD="gemini --yolo"
+        AI_CMD="$gemini_path --yolo"
         AI_CMD_NAME="Gemini CLI"
-        AI_RESUME_CMD="gemini --resume"
+        AI_RESUME_CMD="$gemini_path --resume"
         ;;
       "Skip - don't use an AI tool")
         AI_CMD="skip"
@@ -245,23 +253,23 @@ _resolve_ai_command() {
 
   # Only one tool available - use it
   if [[ "$claude_available" == true ]]; then
-    AI_CMD="claude --dangerously-skip-permissions"
+    AI_CMD="$claude_path --dangerously-skip-permissions"
     AI_CMD_NAME="Claude Code"
-    AI_RESUME_CMD="claude --dangerously-skip-permissions --continue"
+    AI_RESUME_CMD="$claude_path --dangerously-skip-permissions --continue"
     return 0
   fi
 
   if [[ "$codex_available" == true ]]; then
-    AI_CMD="codex --yolo"
+    AI_CMD="$codex_path --yolo"
     AI_CMD_NAME="Codex"
-    AI_RESUME_CMD="codex resume --last"
+    AI_RESUME_CMD="$codex_path resume --last"
     return 0
   fi
 
   if [[ "$gemini_available" == true ]]; then
-    AI_CMD="gemini --yolo"
+    AI_CMD="$gemini_path --yolo"
     AI_CMD_NAME="Gemini CLI"
-    AI_RESUME_CMD="gemini --resume"
+    AI_RESUME_CMD="$gemini_path --resume"
     return 0
   fi
 
