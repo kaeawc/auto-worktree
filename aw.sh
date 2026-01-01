@@ -138,6 +138,25 @@ _enable_autoselect() {
   rm -f "$_AW_AUTOSELECT_PREF"
 }
 
+# PR Auto-select preference file (separate from issue auto-select)
+_AW_PR_AUTOSELECT_PREF="$_AW_CONFIG_DIR/pr_autoselect_disabled"
+
+# Check if PR auto-select is disabled
+_is_pr_autoselect_disabled() {
+  [[ -f "$_AW_PR_AUTOSELECT_PREF" ]]
+}
+
+# Disable PR auto-select
+_disable_pr_autoselect() {
+  mkdir -p "$_AW_CONFIG_DIR"
+  touch "$_AW_PR_AUTOSELECT_PREF"
+}
+
+# Enable PR auto-select
+_enable_pr_autoselect() {
+  rm -f "$_AW_PR_AUTOSELECT_PREF"
+}
+
 # AI-powered issue selection - filters to top 5 issues in priority order
 _ai_select_issues() {
   local issues="$1"
@@ -190,6 +209,69 @@ Return only the 5 issue numbers, one per line, nothing else."
     local matching_issue=$(echo "$highlighted_issues" | grep -E "^(● )?#${num} \|" | head -1)
     if [[ -n "$matching_issue" ]]; then
       filtered+="${matching_issue}"$'\n'
+    fi
+  done <<< "$selected_numbers"
+
+  echo "$filtered"
+}
+
+# AI-powered PR selection - filters to top 5 PRs in priority order
+_ai_select_prs() {
+  local prs="$1"
+  local highlighted_prs="$2"
+  local current_user="$3"
+  local repo_info="$4"
+
+  # Create a temporary file with the PR list
+  local temp_prs=$(mktemp)
+  echo "$prs" > "$temp_prs"
+
+  # Prepare the prompt for AI
+  local prompt="Analyze the following GitHub Pull Requests and select the top 5 PRs that would be best to review next. Consider the following criteria in priority order:
+
+1. PRs where the current user ($current_user) was requested as a reviewer (highest priority)
+2. PRs with no reviews yet (need attention)
+3. Smaller PRs with fewer changes (easier to review, faster feedback)
+4. PRs with 100% passing checks (✓ status) - prefer these over failing (✗) or pending (○)
+5. Author reputation: prefer maintainers/core contributors over occasional contributors
+
+Return ONLY the top 5 PR numbers in priority order (one per line), formatted as just the numbers (e.g., '42').
+
+Repository: $repo_info
+Current user: $current_user
+
+Pull Requests:
+$(cat "$temp_prs")
+
+Return only the 5 PR numbers, one per line, nothing else."
+
+  # Use the configured AI tool to select PRs
+  _resolve_ai_command || {
+    rm -f "$temp_prs"
+    return 1
+  }
+
+  if [[ "${AI_CMD[1]}" == "skip" ]]; then
+    rm -f "$temp_prs"
+    return 1
+  fi
+
+  # Run AI command with the prompt
+  local selected_numbers
+  selected_numbers=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[0-9]+$' | head -5)
+
+  rm -f "$temp_prs"
+
+  if [[ -z "$selected_numbers" ]]; then
+    return 1
+  fi
+
+  # Filter highlighted PRs to only include selected ones, in priority order
+  local filtered=""
+  while IFS= read -r num; do
+    local matching_pr=$(echo "$highlighted_prs" | grep -E "^(● )?#${num} \|" | head -1)
+    if [[ -n "$matching_pr" ]]; then
+      filtered+="${matching_pr}"$'\n'
     fi
   done <<< "$selected_numbers"
 
@@ -2251,8 +2333,8 @@ _aw_pr() {
           }
         }')
     else
-      # List GitHub PRs
-      prs=$(gh pr list --limit 100 --state open --json number,title,author,headRefName,baseRefName,labels,statusCheckRollup 2>/dev/null | \
+      # List GitHub PRs with detailed information for AI selection
+      prs=$(gh pr list --limit 100 --state open --json number,title,author,headRefName,baseRefName,labels,statusCheckRollup,reviews,additions,deletions,reviewRequests 2>/dev/null | \
         jq -r '.[] | "#\(.number) | \(
           if (.statusCheckRollup | length == 0) then "○"
           elif (.statusCheckRollup | all(.state == "SUCCESS")) then "✓"
@@ -2261,6 +2343,14 @@ _aw_pr() {
           end
         ) | \(.title) | @\(.author.login)\(
           if (.labels | length > 0) then " |" + ([.labels[].name] | map(" [\(.)]") | join(""))
+          else ""
+          end
+        ) | +\(.additions)/-\(.deletions) | \(
+          if (.reviews | length) > 0 then "reviews:\(.reviews | length)"
+          else "reviews:0"
+          end
+        )\(
+          if (.reviewRequests | length) > 0 then " | requested:[" + ([.reviewRequests[].login] | join(",")) + "]"
           else ""
           end
         ) | \(.headRefName)"')
@@ -2322,10 +2412,28 @@ _aw_pr() {
       fi
     done <<< "$prs"
 
-    if [[ "$provider" == "gitlab" ]]; then
-      local selection=$(echo "$highlighted_prs" | gum filter --placeholder "Type to filter MRs... (● = active worktree, ○=pending)")
+    # Build the selection list with auto-select options (GitHub only)
+    local selection_list=""
+    if [[ "$provider" == "github" ]]; then
+      if ! _is_pr_autoselect_disabled; then
+        # Auto-select is enabled - show auto-select options at the top
+        selection_list="⚡ Auto select"$'\n'
+        selection_list+="🚫 Do not show me auto select again"$'\n'
+        selection_list+="$highlighted_prs"
+      else
+        # Auto-select is disabled - add re-enable option at the end
+        selection_list="$highlighted_prs"
+        selection_list+="⚡ Auto select next PR"$'\n'
+      fi
     else
-      local selection=$(echo "$highlighted_prs" | gum filter --placeholder "Type to filter PRs... (● = active worktree, ✓=passing ✗=failing ○=pending)")
+      # GitLab - no auto-select
+      selection_list="$highlighted_prs"
+    fi
+
+    if [[ "$provider" == "gitlab" ]]; then
+      local selection=$(echo "$selection_list" | gum filter --placeholder "Type to filter MRs... (● = active worktree, ○=pending)")
+    else
+      local selection=$(echo "$selection_list" | gum filter --placeholder "Type to filter PRs... (● = active worktree, ✓=passing ✗=failing ○=pending)")
     fi
 
     if [[ -z "$selection" ]]; then
@@ -2333,7 +2441,51 @@ _aw_pr() {
       return 0
     fi
 
-    pr_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+    # Handle special auto-select options (GitHub only)
+    if [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select" ]]; then
+      gum spin --spinner dot --title "AI is selecting best PRs..." -- sleep 0.5
+
+      # Get current GitHub user
+      local current_user=$(gh api user -q .login 2>/dev/null || echo "unknown")
+
+      local filtered_prs=$(_ai_select_prs "$prs" "$highlighted_prs" "$current_user" "${REPO_OWNER}/${REPO_NAME}")
+
+      if [[ -z "$filtered_prs" ]]; then
+        gum style --foreground 1 "AI selection failed, showing all PRs"
+        filtered_prs="$highlighted_prs"
+      else
+        echo ""
+        gum style --foreground 2 "✓ AI selected top 5 PRs in priority order"
+        echo ""
+      fi
+
+      # Show the filtered list
+      selection=$(echo "$filtered_prs" | gum filter --placeholder "Select a PR from AI recommendations")
+
+      if [[ -z "$selection" ]]; then
+        gum style --foreground 3 "Cancelled"
+        return 0
+      fi
+
+      pr_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+
+    elif [[ "$provider" == "github" ]] && [[ "$selection" == "🚫 Do not show me auto select again" ]]; then
+      _disable_pr_autoselect
+      gum style --foreground 3 "Auto-select disabled. You can re-enable it from the bottom of the PR list."
+      # Recursively call to show the updated list
+      _aw_pr
+      return $?
+
+    elif [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select next PR" ]]; then
+      _enable_pr_autoselect
+      gum style --foreground 2 "Auto-select re-enabled!"
+      # Recursively call to show the updated list
+      _aw_pr
+      return $?
+
+    else
+      pr_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+    fi
   fi
 
   # Get PR/MR details
