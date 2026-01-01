@@ -145,5 +145,6 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		}
 	}
 
-	_, _ = fmt.Fprint(w, fn(str))
+	//nolint:errcheck // Error writing to writer is not actionable in render function
+	fmt.Fprint(w, fn(str))
 }

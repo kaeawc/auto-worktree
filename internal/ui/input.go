@@ -10,9 +10,9 @@ import (
 // InputModel represents a text input model.
 type InputModel struct {
 	textInput textinput.Model
+	err       error
 	prompt    string
 	value     string
-	err       error
 }
 
 // NewInput creates a new input model.
