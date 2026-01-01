@@ -45,9 +45,10 @@ _aw_check_deps() {
 # ============================================================================
 
 # Global variables for AI tool selection
-AI_CMD=""
+# Note: AI_CMD and AI_RESUME_CMD are arrays to properly handle arguments in zsh
+AI_CMD=()
 AI_CMD_NAME=""
-AI_RESUME_CMD=""
+AI_RESUME_CMD=()
 
 # Config directory for storing preferences
 _AW_CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/auto-worktree"
@@ -110,7 +111,7 @@ _install_ai_tool() {
       return 1
       ;;
     "Skip - don't use an AI tool")
-      AI_CMD="skip"
+      AI_CMD=(skip)
       AI_CMD_NAME="none"
       return 0
       ;;
@@ -145,30 +146,30 @@ _resolve_ai_command() {
     case "$saved_pref" in
       claude)
         if [[ "$claude_available" == true ]]; then
-          AI_CMD="$claude_path --dangerously-skip-permissions"
+          AI_CMD=("$claude_path" --dangerously-skip-permissions)
           AI_CMD_NAME="Claude Code"
-          AI_RESUME_CMD="$claude_path --dangerously-skip-permissions --continue"
+          AI_RESUME_CMD=("$claude_path" --dangerously-skip-permissions --continue)
           return 0
         fi
         ;;
       codex)
         if [[ "$codex_available" == true ]]; then
-          AI_CMD="$codex_path --yolo"
+          AI_CMD=("$codex_path" --yolo)
           AI_CMD_NAME="Codex"
-          AI_RESUME_CMD="$codex_path resume --last"
+          AI_RESUME_CMD=("$codex_path" resume --last)
           return 0
         fi
         ;;
       gemini)
         if [[ "$gemini_available" == true ]]; then
-          AI_CMD="$gemini_path --yolo"
+          AI_CMD=("$gemini_path" --yolo)
           AI_CMD_NAME="Gemini CLI"
-          AI_RESUME_CMD="$gemini_path --resume"
+          AI_RESUME_CMD=("$gemini_path" --resume)
           return 0
         fi
         ;;
       skip)
-        AI_CMD="skip"
+        AI_CMD=(skip)
         AI_CMD_NAME="none"
         return 0
         ;;
@@ -200,22 +201,22 @@ _resolve_ai_command() {
 
     case "$choice" in
       "Claude Code (Anthropic)")
-        AI_CMD="$claude_path --dangerously-skip-permissions"
+        AI_CMD=("$claude_path" --dangerously-skip-permissions)
         AI_CMD_NAME="Claude Code"
-        AI_RESUME_CMD="$claude_path --dangerously-skip-permissions --continue"
+        AI_RESUME_CMD=("$claude_path" --dangerously-skip-permissions --continue)
         ;;
       "Codex CLI (OpenAI)")
-        AI_CMD="$codex_path --yolo"
+        AI_CMD=("$codex_path" --yolo)
         AI_CMD_NAME="Codex"
-        AI_RESUME_CMD="$codex_path resume --last"
+        AI_RESUME_CMD=("$codex_path" resume --last)
         ;;
       "Gemini CLI (Google)")
-        AI_CMD="$gemini_path --yolo"
+        AI_CMD=("$gemini_path" --yolo)
         AI_CMD_NAME="Gemini CLI"
-        AI_RESUME_CMD="$gemini_path --resume"
+        AI_RESUME_CMD=("$gemini_path" --resume)
         ;;
       "Skip - don't use an AI tool")
-        AI_CMD="skip"
+        AI_CMD=(skip)
         AI_CMD_NAME="none"
         return 0
         ;;
@@ -253,23 +254,23 @@ _resolve_ai_command() {
 
   # Only one tool available - use it
   if [[ "$claude_available" == true ]]; then
-    AI_CMD="$claude_path --dangerously-skip-permissions"
+    AI_CMD=("$claude_path" --dangerously-skip-permissions)
     AI_CMD_NAME="Claude Code"
-    AI_RESUME_CMD="$claude_path --dangerously-skip-permissions --continue"
+    AI_RESUME_CMD=("$claude_path" --dangerously-skip-permissions --continue)
     return 0
   fi
 
   if [[ "$codex_available" == true ]]; then
-    AI_CMD="$codex_path --yolo"
+    AI_CMD=("$codex_path" --yolo)
     AI_CMD_NAME="Codex"
-    AI_RESUME_CMD="$codex_path resume --last"
+    AI_RESUME_CMD=("$codex_path" resume --last)
     return 0
   fi
 
   if [[ "$gemini_available" == true ]]; then
-    AI_CMD="$gemini_path --yolo"
+    AI_CMD=("$gemini_path" --yolo)
     AI_CMD_NAME="Gemini CLI"
-    AI_RESUME_CMD="$gemini_path --resume"
+    AI_RESUME_CMD=("$gemini_path" --resume)
     return 0
   fi
 
@@ -824,12 +825,12 @@ _aw_create_worktree() {
 
     _resolve_ai_command || return 1
 
-    if [[ "$AI_CMD" != "skip" ]]; then
+    if [[ "${AI_CMD[1]}" != "skip" ]]; then
       gum style --foreground 2 "Starting $AI_CMD_NAME..."
       if [[ -n "$initial_context" ]]; then
-        $AI_CMD "$initial_context"
+        "${AI_CMD[@]}" "$initial_context"
       else
-        $AI_CMD
+        "${AI_CMD[@]}"
       fi
     else
       gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
@@ -1179,9 +1180,9 @@ _aw_issue() {
 
       _resolve_ai_command || return 1
 
-      if [[ "$AI_CMD" != "skip" ]]; then
+      if [[ "${AI_CMD[1]}" != "skip" ]]; then
         gum style --foreground 2 "Starting $AI_CMD_NAME..."
-        $AI_CMD
+        "${AI_CMD[@]}"
       else
         gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
       fi
@@ -1302,9 +1303,9 @@ _aw_pr() {
 
       _resolve_ai_command || return 1
 
-      if [[ "$AI_CMD" != "skip" ]]; then
+      if [[ "${AI_CMD[1]}" != "skip" ]]; then
         gum style --foreground 2 "Starting $AI_CMD_NAME..."
-        $AI_CMD
+        "${AI_CMD[@]}"
       else
         gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
       fi
@@ -1330,9 +1331,9 @@ _aw_pr() {
 
       _resolve_ai_command || return 1
 
-      if [[ "$AI_CMD" != "skip" ]]; then
+      if [[ "${AI_CMD[1]}" != "skip" ]]; then
         gum style --foreground 2 "Starting $AI_CMD_NAME for PR review..."
-        $AI_CMD
+        "${AI_CMD[@]}"
       else
         gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
       fi
@@ -1386,9 +1387,9 @@ _aw_pr() {
   _resolve_ai_command || return 1
 
   echo ""
-  if [[ "$AI_CMD" != "skip" ]]; then
+  if [[ "${AI_CMD[1]}" != "skip" ]]; then
     gum style --foreground 2 "Starting $AI_CMD_NAME for PR review..."
-    $AI_CMD
+    "${AI_CMD[@]}"
   else
     gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
   fi
@@ -1506,8 +1507,8 @@ _aw_resume() {
 
   _resolve_ai_command || return 1
 
-  if [[ "$AI_CMD" != "skip" ]]; then
-    $AI_RESUME_CMD
+  if [[ "${AI_CMD[1]}" != "skip" ]]; then
+    "${AI_RESUME_CMD[@]}"
   else
     gum style --foreground 3 "Skipping AI tool - worktree is ready for manual work"
   fi
