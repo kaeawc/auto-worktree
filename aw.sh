@@ -86,6 +86,21 @@ _aw_check_issue_provider_deps() {
         return 1
       fi
       ;;
+    "linear")
+      if ! command -v linear &> /dev/null; then
+        gum style --foreground 1 "Error: Linear CLI is required for Linear issue integration"
+        echo ""
+        echo "Install with:"
+        echo "  • macOS:     brew install schpet/tap/linear"
+        echo "  • Deno:      deno install -A --reload -f -g -n linear jsr:@schpet/linear-cli"
+        echo "  • Other:     See https://github.com/schpet/linear-cli#installation"
+        echo ""
+        echo "After installation, configure Linear:"
+        echo "  1. Create an API key at https://linear.app/settings/account/security"
+        echo "  2. Set environment variable: export LINEAR_API_KEY=your_key_here"
+        return 1
+      fi
+      ;;
   esac
 
   return 0
@@ -211,6 +226,62 @@ Return only the 5 issue numbers, one per line, nothing else."
       filtered+="${matching_issue}"$'\n'
     fi
   done <<< "$selected_numbers"
+
+  echo "$filtered"
+}
+
+# AI-powered Linear issue selection - filters to top 5 issues in priority order
+_ai_select_linear_issues() {
+  local issues="$1"
+  local highlighted_issues="$2"
+
+  # Create a temporary file with the issue list
+  local temp_issues=$(mktemp)
+  echo "$issues" > "$temp_issues"
+
+  # Prepare the prompt for AI
+  local prompt="Analyze the following Linear issues and select the top 5 issues that would be best to work on next. Consider:
+- Priority and status
+- Issue complexity and impact
+- Dependencies between issues
+- Team capacity and workflow
+
+Return ONLY the top 5 issue IDs in priority order (one per line), formatted as issue IDs (e.g., 'TEAM-42').
+
+Issues:
+$(cat "$temp_issues")
+
+Return only the 5 issue IDs, one per line, nothing else."
+
+  # Use the configured AI tool to select issues
+  _resolve_ai_command || {
+    rm -f "$temp_issues"
+    return 1
+  }
+
+  if [[ "${AI_CMD[1]}" == "skip" ]]; then
+    rm -f "$temp_issues"
+    return 1
+  fi
+
+  # Run AI command with the prompt
+  local selected_ids
+  selected_ids=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[A-Z][A-Z0-9]+-[0-9]+$' | head -5)
+
+  rm -f "$temp_issues"
+
+  if [[ -z "$selected_ids" ]]; then
+    return 1
+  fi
+
+  # Filter highlighted issues to only include selected ones, in priority order
+  local filtered=""
+  while IFS= read -r id; do
+    local matching_issue=$(echo "$highlighted_issues" | grep -E "^(● )?${id} \|" | head -1)
+    if [[ -n "$matching_issue" ]]; then
+      filtered+="${matching_issue}"$'\n'
+    fi
+  done <<< "$selected_ids"
 
   echo "$filtered"
 }
@@ -711,8 +782,8 @@ _aw_set_issue_provider() {
   # Set the issue provider for this repository
   local provider="$1"
 
-  if [[ "$provider" != "github" ]] && [[ "$provider" != "jira" ]] && [[ "$provider" != "gitlab" ]]; then
-    gum style --foreground 1 "Error: Invalid provider. Must be 'github', 'gitlab', or 'jira'"
+  if [[ "$provider" != "github" ]] && [[ "$provider" != "jira" ]] && [[ "$provider" != "gitlab" ]] && [[ "$provider" != "linear" ]]; then
+    gum style --foreground 1 "Error: Invalid provider. Must be 'github', 'gitlab', 'jira', or 'linear'"
     return 1
   fi
 
@@ -839,6 +910,43 @@ _aw_configure_gitlab() {
   echo ""
 }
 
+_aw_get_linear_team() {
+  # Get the configured default Linear team key
+  git config --get auto-worktree.linear-team 2>/dev/null || echo ""
+}
+
+_aw_set_linear_team() {
+  # Set the default Linear team key for this repository
+  local team="$1"
+  git config auto-worktree.linear-team "$team"
+  gum style --foreground 2 "✓ Linear team set to: $team"
+}
+
+_aw_configure_linear() {
+  # Interactive configuration for Linear
+  echo ""
+  gum style --foreground 6 "Configure Linear for this repository"
+  echo ""
+
+  # Get default Linear team key
+  local current_team=$(_aw_get_linear_team)
+  local team=$(gum input --placeholder "TEAM" \
+    --value "$current_team" \
+    --header "Default Linear Team Key (optional, can filter issues):")
+
+  if [[ -n "$team" ]]; then
+    _aw_set_linear_team "$team"
+  fi
+
+  echo ""
+  gum style --foreground 2 "Linear configuration complete!"
+  echo ""
+  echo "Note: Make sure you've configured the Linear CLI:"
+  echo "  1. Create an API key at https://linear.app/settings/account/security"
+  echo "  2. Set environment variable: export LINEAR_API_KEY=your_key_here"
+  echo ""
+}
+
 _aw_prompt_issue_provider() {
   # Prompt user to choose issue provider if not configured
   echo ""
@@ -849,6 +957,7 @@ _aw_prompt_issue_provider() {
     "GitHub Issues" \
     "GitLab Issues" \
     "JIRA" \
+    "Linear Issues" \
     "Cancel")
 
   case "$choice" in
@@ -862,6 +971,10 @@ _aw_prompt_issue_provider() {
     "JIRA")
       _aw_set_issue_provider "jira"
       _aw_configure_jira
+      ;;
+    "Linear Issues")
+      _aw_set_issue_provider "linear"
+      _aw_configure_linear
       ;;
     *)
       gum style --foreground 3 "Cancelled"
@@ -1095,16 +1208,33 @@ _aw_extract_jira_key() {
   echo "$branch" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1
 }
 
+_aw_extract_linear_key() {
+  # Extract Linear key from branch name patterns like:
+  # work/TEAM-123-description, TEAM-456-fix-something
+  # Linear keys are typically TEAM-NUMBER format (similar to JIRA)
+  local branch="$1"
+  echo "$branch" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1
+}
+
 _aw_extract_issue_id() {
-  # Extract either GitHub/GitLab issue number or JIRA key from branch name
-  # Returns the ID and sets _AW_DETECTED_ISSUE_TYPE to "github", "gitlab", or "jira"
+  # Extract either GitHub/GitLab issue number, JIRA key, or Linear key from branch name
+  # Returns the ID and sets _AW_DETECTED_ISSUE_TYPE to "github", "gitlab", "jira", or "linear"
   local branch="$1"
 
-  # Try JIRA key first (more specific pattern)
-  local jira_key=$(_aw_extract_jira_key "$branch")
-  if [[ -n "$jira_key" ]]; then
-    _AW_DETECTED_ISSUE_TYPE="jira"
-    echo "$jira_key"
+  # Check configured provider first to disambiguate JIRA vs Linear
+  # Both use the same pattern: TEAM-123
+  local provider=$(_aw_get_issue_provider)
+
+  # Try JIRA/Linear key first (more specific pattern)
+  local key=$(_aw_extract_jira_key "$branch")
+  if [[ -n "$key" ]]; then
+    if [[ "$provider" == "linear" ]]; then
+      _AW_DETECTED_ISSUE_TYPE="linear"
+    else
+      # Default to jira if pattern matches (for backwards compatibility)
+      _AW_DETECTED_ISSUE_TYPE="jira"
+    fi
+    echo "$key"
     return 0
   fi
 
@@ -1113,7 +1243,6 @@ _aw_extract_issue_id() {
   local issue_num=$(_aw_extract_issue_number "$branch")
   if [[ -n "$issue_num" ]]; then
     # Check configured provider to determine type
-    local provider=$(_aw_get_issue_provider)
     if [[ "$provider" == "gitlab" ]]; then
       _AW_DETECTED_ISSUE_TYPE="gitlab"
     else
@@ -1371,6 +1500,125 @@ _aw_jira_get_issue_details() {
   # If description is empty or just "∅", set to empty string
   if [[ "$body" == "∅" ]] || [[ "$body" == "" ]]; then
     body=""
+  fi
+
+  return 0
+}
+
+# ============================================================================
+# Linear integration functions
+# ============================================================================
+
+_aw_linear_check_completed() {
+  # Check if a Linear issue is completed/done/canceled
+  # Returns 0 if completed, 1 if not completed or error
+  local issue_id="$1"
+
+  if [[ -z "$issue_id" ]]; then
+    return 1
+  fi
+
+  # Get issue details using Linear CLI
+  # The 'linear issue view' command outputs markdown with issue details
+  local issue_view=$(linear issue view "$issue_id" 2>/dev/null)
+
+  if [[ -z "$issue_view" ]]; then
+    return 1
+  fi
+
+  # Extract state from the output (looking for State: or Status: lines)
+  local state=$(echo "$issue_view" | grep -i "State:" | sed 's/.*State:[[:space:]]*//i' | tr -d '\r\n')
+
+  if [[ -z "$state" ]]; then
+    # Try alternative format
+    state=$(echo "$issue_view" | grep -i "Status:" | sed 's/.*Status:[[:space:]]*//i' | tr -d '\r\n')
+  fi
+
+  if [[ -z "$state" ]]; then
+    return 1
+  fi
+
+  # Common completed status names in Linear
+  case "$state" in
+    Done|Completed|Canceled|Cancelled)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+_aw_linear_list_issues() {
+  # List Linear issues
+  # Returns formatted issue list similar to GitHub issues
+  local team=$(_aw_get_linear_team)
+
+  # List issues using Linear CLI
+  # Default: lists unstarted issues assigned to you
+  # Use -A to list all team's unstarted issues
+  local linear_cmd="linear issue list"
+
+  # If a team is configured, we'll use -A to get all team issues
+  # Note: Linear CLI doesn't have direct team filtering in list command
+  # but it respects the LINEAR_TEAM_ID config
+  if [[ -n "$team" ]]; then
+    linear_cmd="linear issue list -A"
+  fi
+
+  # Execute the command and parse output
+  # Linear CLI outputs a table format, we need to parse it
+  $linear_cmd 2>/dev/null | tail -n +2 | awk '{
+    # Parse Linear CLI table output
+    # Expected format: ID    Title    State    ...
+    if (NF >= 3 && $1 ~ /^[A-Z]+-[0-9]+$/) {
+      id = $1
+      # Extract title (everything between ID and State columns)
+      # This is a simplified parser - may need adjustment based on actual output
+      title = ""
+      for (i=2; i<NF; i++) {
+        if (title != "") title = title " "
+        title = title $i
+      }
+
+      # Format: TEAM-123 | Title
+      printf "%s | %s\n", id, title
+    }
+  }'
+}
+
+_aw_linear_get_issue_details() {
+  # Get Linear issue details
+  # Sets variables: title, body (description)
+  local issue_id="$1"
+
+  if [[ -z "$issue_id" ]]; then
+    return 1
+  fi
+
+  # Get issue details using Linear CLI
+  local issue_view=$(linear issue view "$issue_id" 2>/dev/null)
+
+  if [[ -z "$issue_view" ]]; then
+    return 1
+  fi
+
+  # Extract title - Linear outputs markdown format
+  # Title is typically in a heading or after "Title:" label
+  title=$(linear issue title "$issue_id" 2>/dev/null)
+
+  if [[ -z "$title" ]]; then
+    # Fallback: parse from view output
+    title=$(echo "$issue_view" | grep -i "^# " | head -1 | sed 's/^# //')
+  fi
+
+  # Extract description/body from the markdown output
+  # The description is the content after the metadata section
+  body=$(echo "$issue_view" | sed -n '/^## Description/,/^##/p' | grep -v "^##" | sed 's/^[[:space:]]*//')
+
+  # If body is empty, try to get any content after the header
+  if [[ -z "$body" ]]; then
+    body=$(echo "$issue_view" | sed '1,/^---$/d' | sed '/^$/d' | head -20)
   fi
 
   return 0
@@ -1773,6 +2021,13 @@ _aw_list() {
             merged_indicator=" $(gum style --foreground 5 "[closed #$issue_id]")"
           fi
         fi
+      elif [[ "$_AW_DETECTED_ISSUE_TYPE" == "linear" ]]; then
+        # Check if Linear issue is completed
+        if _aw_linear_check_completed "$issue_id"; then
+          is_merged=true
+          merge_reason="Linear $issue_id"
+          merged_indicator=" $(gum style --foreground 5 "[completed $issue_id]")"
+        fi
       elif [[ "$_AW_DETECTED_ISSUE_TYPE" == "github" ]]; then
         # Check if GitHub issue is merged
         if _aw_check_issue_merged "$issue_id"; then
@@ -2028,6 +2283,8 @@ _aw_issue() {
       issues=$(_aw_jira_list_issues)
     elif [[ "$provider" == "gitlab" ]]; then
       issues=$(_aw_gitlab_list_issues)
+    elif [[ "$provider" == "linear" ]]; then
+      issues=$(_aw_linear_list_issues)
     else
       issues=$(gh issue list --limit 100 --state open --json number,title,labels \
         --template '{{range .}}#{{.number}} | {{.title}}{{if .labels}} |{{range .labels}} [{{.name}}]{{end}}{{end}}{{"\n"}}{{end}}' 2>/dev/null)
@@ -2038,6 +2295,8 @@ _aw_issue() {
         gum style --foreground 1 "No open JIRA issues found"
       elif [[ "$provider" == "gitlab" ]]; then
         gum style --foreground 1 "No open GitLab issues found"
+      elif [[ "$provider" == "linear" ]]; then
+        gum style --foreground 1 "No open Linear issues found"
       else
         gum style --foreground 1 "No open GitHub issues found"
       fi
@@ -2054,6 +2313,8 @@ _aw_issue() {
           if [[ -n "$wt_branch" ]]; then
             if [[ "$provider" == "jira" ]]; then
               local wt_issue=$(_aw_extract_jira_key "$wt_branch")
+            elif [[ "$provider" == "linear" ]]; then
+              local wt_issue=$(_aw_extract_linear_key "$wt_branch")
             else
               # Both GitHub and GitLab use issue numbers
               local wt_issue=$(_aw_extract_issue_number "$wt_branch")
@@ -2082,7 +2343,7 @@ _aw_issue() {
         done
         # Add indicator if active
         if [[ "$is_active" == "true" ]]; then
-          if [[ "$provider" == "jira" ]]; then
+          if [[ "$provider" == "jira" ]] || [[ "$provider" == "linear" ]]; then
             highlighted_issues+="● $issue_line"$'\n'
           else
             highlighted_issues+="$(echo "$issue_line" | sed 's/^#/● #/')"$'\n'
@@ -2113,11 +2374,16 @@ _aw_issue() {
       return 0
     fi
 
-    # Handle special auto-select options (GitHub only for now)
-    if [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select" ]]; then
+    # Handle special auto-select options (GitHub and Linear)
+    if [[ ("$provider" == "github" || "$provider" == "linear") ]] && [[ "$selection" == "⚡ Auto select" ]]; then
       gum spin --spinner dot --title "AI is selecting best issues..." -- sleep 0.5
 
-      local filtered_issues=$(_ai_select_issues "$issues" "$highlighted_issues" "${REPO_OWNER}/${REPO_NAME}")
+      local filtered_issues=""
+      if [[ "$provider" == "github" ]]; then
+        filtered_issues=$(_ai_select_issues "$issues" "$highlighted_issues" "${REPO_OWNER}/${REPO_NAME}")
+      elif [[ "$provider" == "linear" ]]; then
+        filtered_issues=$(_ai_select_linear_issues "$issues" "$highlighted_issues")
+      fi
 
       if [[ -z "$filtered_issues" ]]; then
         gum style --foreground 1 "AI selection failed, showing all issues"
@@ -2138,7 +2404,7 @@ _aw_issue() {
 
       issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
 
-    elif [[ "$provider" == "github" ]] && [[ "$selection" == "🚫 Do not show me auto select again" ]]; then
+    elif [[ ("$provider" == "github" || "$provider" == "linear") ]] && [[ "$selection" == "🚫 Do not show me auto select again" ]]; then
       _disable_autoselect
       gum style --foreground 3 "Auto-select disabled. You can re-enable it from the bottom of the issue list."
       # Recursively call to show the updated list
@@ -2172,6 +2438,11 @@ _aw_issue() {
       gum style --foreground 1 "Could not fetch GitLab issue #$issue_id"
       return 1
     }
+  elif [[ "$provider" == "linear" ]]; then
+    _aw_linear_get_issue_details "$issue_id" || {
+      gum style --foreground 1 "Could not fetch Linear issue $issue_id"
+      return 1
+    }
   else
     title=$(gh issue view "$issue_id" --json title --jq '.title' 2>/dev/null)
     body=$(gh issue view "$issue_id" --json body --jq '.body // ""' 2>/dev/null)
@@ -2193,6 +2464,8 @@ _aw_issue() {
           local wt_issue=""
           if [[ "$provider" == "jira" ]]; then
             wt_issue=$(_aw_extract_jira_key "$wt_branch")
+          elif [[ "$provider" == "linear" ]]; then
+            wt_issue=$(_aw_extract_linear_key "$wt_branch")
           else
             wt_issue=$(_aw_extract_issue_number "$wt_branch")
           fi
