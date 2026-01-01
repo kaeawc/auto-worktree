@@ -84,7 +84,7 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v7
         with:
-          version: v2.0.0  # Built with Go 1.25+
+          version: v2.7.2  # Latest version with Go 1.25+ support
           args: --timeout=5m
 
   go-staticcheck:
