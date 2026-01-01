@@ -9,6 +9,8 @@ import (
 
 func TestMain(t *testing.T) {
 	if os.Getenv("GO_TEST_PROCESS") == "1" {
+		// Run with help argument to avoid interactive menu in tests
+		os.Args = []string{"auto-worktree", "help"}
 		main()
 		return
 	}
