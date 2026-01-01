@@ -68,6 +68,7 @@ func runCommand(command string) error {
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		showHelp()
 		os.Exit(1)
+
 		return nil
 	}
 }

@@ -287,8 +287,8 @@ func RunRemove(path string) error {
 
 	// Expand ~ to home directory
 	if strings.HasPrefix(path, "~") {
-		homeDir, err := os.UserHomeDir()
-		if err == nil {
+		homeDir, homeErr := os.UserHomeDir()
+		if homeErr == nil {
 			path = filepath.Join(homeDir, path[1:])
 		}
 	}

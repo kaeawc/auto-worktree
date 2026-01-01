@@ -99,6 +99,7 @@ func (m MenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if ok {
 				m.choice = i.Action()
 			}
+
 			return m, tea.Quit
 		}
 	}
@@ -144,5 +145,5 @@ func (d menuItemDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		}
 	}
 
-	fmt.Fprint(w, fn(str))
+	_, _ = fmt.Fprint(w, fn(str))
 }
