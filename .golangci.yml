@@ -68,6 +68,8 @@ linters:
 
     govet:
       enable-all: true
+      disable:
+        - fieldalignment  # Minor optimization, not critical
       settings:
         shadow:
           strict: false
