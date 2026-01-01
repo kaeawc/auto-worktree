@@ -32,7 +32,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
-        go-version: ['1.25.x', '1.24.x']
+        go-version: ['1.23.x', '1.22.x']
 
     steps:
       - name: Checkout repository
@@ -59,7 +59,7 @@ jobs:
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
 
       - name: Upload coverage to Codecov
-        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.25.x'
+        if: matrix.os == 'ubuntu-latest' && matrix.go-version == '1.23.x'
         uses: codecov/codecov-action@v4
         with:
           file: ./coverage.out
@@ -78,7 +78,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.23.x'
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v6
@@ -97,7 +97,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.23.x'
 
       - name: Install staticcheck
         run: go install honnef.co/go/tools/cmd/staticcheck@latest
@@ -124,7 +124,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.25.x'
+          go-version: '1.23.x'
 
       - name: Build binary
         env:
