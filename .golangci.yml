@@ -19,10 +19,9 @@ linters:
   enable:
     # Enabled by default
     - errcheck      # Check for unchecked errors
-    - gosimple      # Simplify code
     - govet         # Vet examines Go source code
     - ineffassign   # Detect ineffectual assignments
-    - staticcheck   # Go static analysis tool
+    - staticcheck   # Go static analysis tool (includes gosimple in v2)
     - unused        # Check for unused constants, variables, functions and types
 
     # Additional recommended linters
