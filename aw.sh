@@ -3154,13 +3154,19 @@ Output the issue body in markdown format."
   echo ""
 
   # Create output file (BSD/macOS compatible)
-  local output_file=$(mktemp /tmp/aw_issue_XXXXXX.md)
+  # On BSD/macOS, XXXXXX must be at the end of the template, so we create
+  # the temp file without .md extension and then rename it
+  local output_file=$(mktemp /tmp/aw_issue_XXXXXX)
 
   # Check if mktemp succeeded
   if [[ -z "$output_file" ]] || [[ ! -f "$output_file" ]]; then
     gum style --foreground 3 "Failed to create temporary file"
     return 1
   fi
+
+  # Add .md extension
+  mv "$output_file" "${output_file}.md"
+  output_file="${output_file}.md"
 
   # Execute AI in headless mode with -p flag
   if "${AI_CMD[@]}" -p "$ai_prompt" > "$output_file" 2>&1; then
