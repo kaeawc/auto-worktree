@@ -103,6 +103,83 @@ _save_ai_preference() {
   echo "$tool" > "$_AW_PREF_FILE"
 }
 
+# Auto-select preference file
+_AW_AUTOSELECT_PREF="$_AW_CONFIG_DIR/issue_autoselect_disabled"
+
+# Check if auto-select is disabled
+_is_autoselect_disabled() {
+  [[ -f "$_AW_AUTOSELECT_PREF" ]]
+}
+
+# Disable auto-select
+_disable_autoselect() {
+  mkdir -p "$_AW_CONFIG_DIR"
+  touch "$_AW_AUTOSELECT_PREF"
+}
+
+# Enable auto-select
+_enable_autoselect() {
+  rm -f "$_AW_AUTOSELECT_PREF"
+}
+
+# AI-powered issue selection - filters to top 5 issues in priority order
+_ai_select_issues() {
+  local issues="$1"
+  local highlighted_issues="$2"
+  local repo_info="$3"
+
+  # Create a temporary file with the issue list
+  local temp_issues=$(mktemp)
+  echo "$issues" > "$temp_issues"
+
+  # Prepare the prompt for AI
+  local prompt="Analyze the following GitHub issues and select the top 5 issues that would be best to work on next. Consider:
+- Priority labels (high priority, urgent, etc.)
+- Issue type (bug fixes are often higher priority than features)
+- Labels like 'good first issue' or 'help wanted'
+- Issue complexity and impact
+- Any context from the repository: $repo_info
+
+Return ONLY the top 5 issue numbers in priority order (one per line), formatted as just the numbers (e.g., '42').
+
+Issues:
+$(cat "$temp_issues")
+
+Return only the 5 issue numbers, one per line, nothing else."
+
+  # Use the configured AI tool to select issues
+  _resolve_ai_command || {
+    rm -f "$temp_issues"
+    return 1
+  }
+
+  if [[ "${AI_CMD[1]}" == "skip" ]]; then
+    rm -f "$temp_issues"
+    return 1
+  fi
+
+  # Run AI command with the prompt
+  local selected_numbers
+  selected_numbers=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[0-9]+$' | head -5)
+
+  rm -f "$temp_issues"
+
+  if [[ -z "$selected_numbers" ]]; then
+    return 1
+  fi
+
+  # Filter highlighted issues to only include selected ones, in priority order
+  local filtered=""
+  while IFS= read -r num; do
+    local matching_issue=$(echo "$highlighted_issues" | grep -E "^(● )?#${num} \|" | head -1)
+    if [[ -n "$matching_issue" ]]; then
+      filtered+="${matching_issue}"$'\n'
+    fi
+  done <<< "$selected_numbers"
+
+  echo "$filtered"
+}
+
 # Install AI tool via interactive menu
 _install_ai_tool() {
   echo ""
@@ -113,6 +190,7 @@ _install_ai_tool() {
     "Install Claude Code (Anthropic)" \
     "Install Codex CLI (OpenAI)" \
     "Install Gemini CLI (Google)" \
+    "Install Google Jules CLI (Google)" \
     "Skip - don't use an AI tool" \
     "Cancel")
 
@@ -145,6 +223,15 @@ _install_ai_tool() {
       echo ""
       return 1
       ;;
+    "Install Google Jules CLI (Google)")
+      echo ""
+      gum style --foreground 6 "Install Google Jules CLI with:"
+      echo "  • npm:     npm install -g @google/jules"
+      echo ""
+      echo "For more information, visit: https://jules.google/docs"
+      echo ""
+      return 1
+      ;;
     "Skip - don't use an AI tool")
       AI_CMD=(skip)
       AI_CMD_NAME="none"
@@ -160,9 +247,11 @@ _resolve_ai_command() {
   local claude_available=false
   local codex_available=false
   local gemini_available=false
+  local jules_available=false
   local claude_path=""
   local codex_path=""
   local gemini_path=""
+  local jules_path=""
 
   # Check which tools are available and get their full paths
   claude_path=$(command -v claude 2>/dev/null)
@@ -173,6 +262,9 @@ _resolve_ai_command() {
 
   gemini_path=$(command -v gemini 2>/dev/null)
   [[ -n "$gemini_path" ]] && gemini_available=true
+
+  jules_path=$(command -v jules 2>/dev/null)
+  [[ -n "$jules_path" ]] && jules_available=true
 
   # Check for saved preference first
   local saved_pref=$(_load_ai_preference)
@@ -203,6 +295,14 @@ _resolve_ai_command() {
           return 0
         fi
         ;;
+      jules)
+        if [[ "$jules_available" == true ]]; then
+          AI_CMD=("$jules_path")
+          AI_CMD_NAME="Google Jules CLI"
+          AI_RESUME_CMD=("$jules_path")
+          return 0
+        fi
+        ;;
       skip)
         AI_CMD=(skip)
         AI_CMD_NAME="none"
@@ -218,6 +318,7 @@ _resolve_ai_command() {
   [[ "$claude_available" == true ]] && ((available_count++))
   [[ "$codex_available" == true ]] && ((available_count++))
   [[ "$gemini_available" == true ]] && ((available_count++))
+  [[ "$jules_available" == true ]] && ((available_count++))
 
   # If multiple tools are available, let user choose
   if [[ $available_count -gt 1 ]]; then
@@ -230,6 +331,7 @@ _resolve_ai_command() {
     [[ "$claude_available" == true ]] && options+=("Claude Code (Anthropic)")
     [[ "$codex_available" == true ]] && options+=("Codex CLI (OpenAI)")
     [[ "$gemini_available" == true ]] && options+=("Gemini CLI (Google)")
+    [[ "$jules_available" == true ]] && options+=("Google Jules CLI (Google)")
     options+=("Skip - don't use an AI tool")
 
     local choice=$(gum choose "${options[@]}")
@@ -249,6 +351,11 @@ _resolve_ai_command() {
         AI_CMD=("$gemini_path" --yolo)
         AI_CMD_NAME="Gemini CLI"
         AI_RESUME_CMD=("$gemini_path" --resume)
+        ;;
+      "Google Jules CLI (Google)")
+        AI_CMD=("$jules_path")
+        AI_CMD_NAME="Google Jules CLI"
+        AI_RESUME_CMD=("$jules_path")
         ;;
       "Skip - don't use an AI tool")
         AI_CMD=(skip)
@@ -275,6 +382,10 @@ _resolve_ai_command() {
         "Gemini CLI (Google)")
           _save_ai_preference "gemini"
           gum style --foreground 2 "Saved Gemini CLI as default"
+          ;;
+        "Google Jules CLI (Google)")
+          _save_ai_preference "jules"
+          gum style --foreground 2 "Saved Google Jules CLI as default"
           ;;
         "Skip - don't use an AI tool")
           _save_ai_preference "skip"
@@ -306,6 +417,13 @@ _resolve_ai_command() {
     AI_CMD=("$gemini_path" --yolo)
     AI_CMD_NAME="Gemini CLI"
     AI_RESUME_CMD=("$gemini_path" --resume)
+    return 0
+  fi
+
+  if [[ "$jules_available" == true ]]; then
+    AI_CMD=("$jules_path")
+    AI_CMD_NAME="Google Jules CLI"
+    AI_RESUME_CMD=("$jules_path")
     return 0
   fi
 
@@ -1465,14 +1583,69 @@ _aw_issue() {
       fi
     done <<< "$issues"
 
-    local selection=$(echo "$highlighted_issues" | gum filter --placeholder "Type to filter issues... (● = active worktree)")
+    # Build the selection list with auto-select options
+    local selection_list=""
+    if ! _is_autoselect_disabled; then
+      # Auto-select is enabled - show auto-select options at the top
+      selection_list="⚡ Auto select"$'\n'
+      selection_list+="🚫 Do not show me auto select again"$'\n'
+      selection_list+="$highlighted_issues"
+    else
+      # Auto-select is disabled - add re-enable option at the end
+      selection_list="$highlighted_issues"
+      selection_list+="⚡ Auto select next issue"$'\n'
+    fi
+
+    local selection=$(echo "$selection_list" | gum filter --placeholder "Type to filter issues... (● = active worktree)")
 
     if [[ -z "$selection" ]]; then
       gum style --foreground 3 "Cancelled"
       return 0
     fi
 
-    issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+    # Handle special auto-select options (GitHub only for now)
+    if [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select" ]]; then
+      gum spin --spinner dot --title "AI is selecting best issues..." -- sleep 0.5
+
+      local filtered_issues=$(_ai_select_issues "$issues" "$highlighted_issues" "${REPO_OWNER}/${REPO_NAME}")
+
+      if [[ -z "$filtered_issues" ]]; then
+        gum style --foreground 1 "AI selection failed, showing all issues"
+        filtered_issues="$highlighted_issues"
+      else
+        echo ""
+        gum style --foreground 2 "✓ AI selected top 5 issues in priority order"
+        echo ""
+      fi
+
+      # Show the filtered list
+      selection=$(echo "$filtered_issues" | gum filter --placeholder "Select an issue from AI recommendations")
+
+      if [[ -z "$selection" ]]; then
+        gum style --foreground 3 "Cancelled"
+        return 0
+      fi
+
+      issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+
+    elif [[ "$provider" == "github" ]] && [[ "$selection" == "🚫 Do not show me auto select again" ]]; then
+      _disable_autoselect
+      gum style --foreground 3 "Auto-select disabled. You can re-enable it from the bottom of the issue list."
+      # Recursively call to show the updated list
+      _aw_issue
+      return $?
+
+    elif [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select next issue" ]]; then
+      _enable_autoselect
+      gum style --foreground 2 "Auto-select re-enabled!"
+      # Recursively call to show the updated list
+      _aw_issue
+      return $?
+
+    else
+      # Normal issue selection (works for both GitHub and JIRA)
+      issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+    fi
   fi
 
   # Fetch issue details including body
@@ -1938,6 +2111,170 @@ _aw_resume() {
 # Main menu
 # ============================================================================
 
+_aw_cleanup_interactive() {
+  _aw_ensure_git_repo || return 1
+  _aw_get_repo_info
+
+  local current_path=$(pwd)
+  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+  local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
+
+  if [[ $worktree_count -le 1 ]]; then
+    gum style --foreground 8 "No additional worktrees to clean up for $_AW_SOURCE_FOLDER"
+    return 0
+  fi
+
+  local now=$(date +%s)
+  local one_day=$((24 * 60 * 60))
+  local four_days=$((4 * 24 * 60 * 60))
+
+  # Build list of worktrees with their display information
+  local -a wt_choices=()
+  local -a wt_paths=()
+  local -a wt_branches=()
+  local -a wt_warnings=()
+
+  while IFS= read -r wt_path; do
+    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
+    [[ "$wt_path" == "$current_path" ]] && continue
+    [[ ! -d "$wt_path" ]] && continue
+
+    local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+    local commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
+
+    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+      commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -exec stat -f %m {} \; 2>/dev/null | sort -rn | head -1)
+    fi
+
+    # Check merge/close status
+    local issue_num=$(_aw_extract_issue_number "$wt_branch")
+    local status_tag=""
+    local warning_msg=""
+
+    if [[ -n "$issue_num" ]] && _aw_check_issue_merged "$issue_num"; then
+      status_tag="[merged #$issue_num]"
+    elif _aw_check_branch_pr_merged "$wt_branch"; then
+      status_tag="[PR merged]"
+    elif [[ -n "$issue_num" ]] && _aw_check_issue_closed "$issue_num"; then
+      if [[ "$_AW_ISSUE_HAS_PR" == "false" ]]; then
+        if _aw_has_unpushed_commits "$wt_path"; then
+          status_tag="[closed #$issue_num ⚠ $_AW_UNPUSHED_COUNT unpushed]"
+          warning_msg="⚠ HAS UNPUSHED COMMITS"
+        else
+          status_tag="[closed #$issue_num]"
+        fi
+      fi
+    fi
+
+    # Build age string
+    local age_str=""
+    if [[ -n "$commit_timestamp" ]] && [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+      local age=$((now - commit_timestamp))
+      local age_days=$((age / one_day))
+      local age_hours=$((age / 3600))
+
+      if [[ $age -lt $one_day ]]; then
+        age_str="[${age_hours}h ago]"
+      else
+        age_str="[${age_days}d ago]"
+      fi
+    else
+      age_str="[unknown]"
+    fi
+
+    # Build display string
+    local display_name="$(basename "$wt_path") ($wt_branch) $age_str"
+    if [[ -n "$status_tag" ]]; then
+      display_name="$display_name $status_tag"
+    fi
+
+    wt_choices+=("$display_name")
+    wt_paths+=("$wt_path")
+    wt_branches+=("$wt_branch")
+    wt_warnings+=("$warning_msg")
+  done <<< "$worktree_list"
+
+  if [[ ${#wt_choices[@]} -eq 0 ]]; then
+    gum style --foreground 8 "No worktrees available to clean up (excluding current worktree)"
+    return 0
+  fi
+
+  # Show selection UI
+  gum style --border rounded --padding "0 1" --border-foreground 4 \
+    "Select worktrees to clean up (space to select, enter to confirm)"
+  echo ""
+
+  local selected=$(printf '%s\n' "${wt_choices[@]}" | gum choose --no-limit --height 15)
+
+  if [[ -z "$selected" ]]; then
+    gum style --foreground 8 "No worktrees selected for cleanup"
+    return 0
+  fi
+
+  # Find indices of selected worktrees
+  local -a selected_indices=()
+  local i=1
+  while IFS= read -r selected_item; do
+    local j=1
+    while [[ $j -le ${#wt_choices[@]} ]]; do
+      if [[ "${wt_choices[$j]}" == "$selected_item" ]]; then
+        selected_indices+=($j)
+        break
+      fi
+      ((j++))
+    done
+    ((i++))
+  done <<< "$selected"
+
+  # Show what will be deleted and confirm
+  echo ""
+  gum style --foreground 5 "Worktrees selected for cleanup:"
+  echo ""
+
+  local has_warnings=false
+  for idx in "${selected_indices[@]}"; do
+    local display="${wt_choices[$idx]}"
+    local warning="${wt_warnings[$idx]}"
+
+    if [[ -n "$warning" ]]; then
+      echo "  • $display"
+      echo "    $(gum style --foreground 1 "$warning")"
+      has_warnings=true
+    else
+      echo "  • $display"
+    fi
+  done
+
+  echo ""
+  if [[ "$has_warnings" == "true" ]]; then
+    gum style --foreground 3 "⚠ Warning: Some worktrees have unpushed commits!"
+    echo ""
+  fi
+
+  if ! gum confirm "Delete these worktrees and their branches?"; then
+    gum style --foreground 8 "Cleanup cancelled"
+    return 0
+  fi
+
+  # Perform cleanup
+  for idx in "${selected_indices[@]}"; do
+    local c_path="${wt_paths[$idx]}"
+    local c_branch="${wt_branches[$idx]}"
+
+    echo ""
+    gum spin --spinner dot --title "Removing $(basename "$c_path")..." -- git worktree remove --force "$c_path"
+    gum style --foreground 2 "✓ Worktree removed: $(basename "$c_path")"
+
+    if git show-ref --verify --quiet "refs/heads/${c_branch}"; then
+      git branch -D "$c_branch" 2>/dev/null
+      gum style --foreground 2 "✓ Branch deleted: $c_branch"
+    fi
+  done
+
+  echo ""
+  gum style --foreground 2 "Cleanup complete!"
+}
+
 _aw_menu() {
   _aw_ensure_git_repo || return 1
   _aw_get_repo_info
@@ -1952,14 +2289,16 @@ _aw_menu() {
     "Resume worktree" \
     "Work on issue" \
     "Review PR" \
+    "Cleanup worktrees" \
     "Cancel")
 
   case "$choice" in
-    "New worktree")    _aw_new true ;;
-    "Resume worktree") _aw_resume ;;
-    "Work on issue")   _aw_issue ;;
-    "Review PR")       _aw_pr ;;
-    *)                 return 0 ;;
+    "New worktree")       _aw_new true ;;
+    "Resume worktree")    _aw_resume ;;
+    "Work on issue")      _aw_issue ;;
+    "Review PR")          _aw_pr ;;
+    "Cleanup worktrees")  _aw_cleanup_interactive ;;
+    *)                    return 0 ;;
   esac
 }
 
@@ -1971,11 +2310,12 @@ auto-worktree() {
   _aw_check_deps || return 1
 
   case "${1:-}" in
-    new)    shift; _aw_new "$@" ;;
-    issue)  shift; _aw_issue "$@" ;;
-    pr)     shift; _aw_pr "$@" ;;
-    resume) shift; _aw_resume ;;
-    list)   shift; _aw_list ;;
+    new)     shift; _aw_new "$@" ;;
+    issue)   shift; _aw_issue "$@" ;;
+    pr)      shift; _aw_pr "$@" ;;
+    resume)  shift; _aw_resume ;;
+    list)    shift; _aw_list ;;
+    cleanup) shift; _aw_cleanup_interactive ;;
     help|--help|-h)
       echo "Usage: auto-worktree [command] [args]"
       echo ""
@@ -1985,6 +2325,7 @@ auto-worktree() {
       echo "  issue [id]      Work on an issue (GitHub #123 or JIRA PROJ-123)"
       echo "  pr [num]        Review a GitHub pull request"
       echo "  list            List existing worktrees"
+      echo "  cleanup         Interactively clean up worktrees"
       echo ""
       echo "Run without arguments for interactive menu."
       echo ""
@@ -2013,6 +2354,7 @@ _auto_worktree() {
     'issue:Work on an issue (GitHub or JIRA)'
     'pr:Review a GitHub pull request'
     'list:List existing worktrees'
+    'cleanup:Interactively clean up worktrees'
     'help:Show help message'
   )
 
