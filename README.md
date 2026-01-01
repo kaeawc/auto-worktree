@@ -7,10 +7,10 @@ A bash tool for safely running AI agents in isolated git worktrees. Create separ
 ## Features
 
 - **Isolated Workspaces**: Each task gets its own worktree - no branch conflicts or stashed changes
-- **Issue Tracking Integration**: Work on GitHub issues or JIRA tickets with automatic branch naming
+- **Issue Tracking Integration**: Work on GitHub issues, GitLab issues, JIRA tickets, or Linear issues with automatic branch naming
 - **GitHub PR Reviews**: Review pull requests in isolated worktrees
 - **Interactive TUI**: Beautiful menus powered by [gum](https://github.com/charmbracelet/gum)
-- **Auto-cleanup**: Detects merged PRs, closed issues, and resolved JIRA tickets
+- **Auto-cleanup**: Detects merged PRs, closed issues, resolved JIRA tickets, and completed Linear issues
 - **Random Names**: Generates memorable branch names like `work/coral-apex-beam`
 - **Tab Completion**: Full zsh completion for commands, issues, and PRs
 - **AI Agent Support**: Integrates with Claude Code, Codex CLI, or Gemini CLI
@@ -36,10 +36,24 @@ brew install gh
 gh auth login
 ```
 
+**For GitLab:**
+```bash
+brew install glab
+glab auth login
+```
+
 **For JIRA:**
 ```bash
 brew install ankitpokhrel/jira-cli/jira-cli
 jira init
+```
+
+**For Linear:**
+```bash
+brew install schpet/tap/linear
+# Or via Deno: deno install -A --reload -f -g -n linear jsr:@schpet/linear-cli
+# Then set your API key:
+export LINEAR_API_KEY=your_key_here  # Get from https://linear.app/settings/account/security
 ```
 
 **For AI agents (choose one):**
@@ -60,7 +74,7 @@ source /path/to/auto-worktree/aw.sh
 ```bash
 auto-worktree                  # Interactive menu
 auto-worktree new              # Create new worktree
-auto-worktree issue [id]       # Work on an issue (GitHub #123 or JIRA PROJ-123)
+auto-worktree issue [id]       # Work on an issue (GitHub #123, JIRA PROJ-123, or Linear TEAM-123)
 auto-worktree pr [num]         # Review a GitHub PR
 auto-worktree list             # List existing worktrees
 auto-worktree help             # Show help
@@ -76,11 +90,19 @@ Enter a branch name or leave blank for a random name like `work/mint-code-flux`.
 
 ### Work on Issues
 
-The first time you run `auto-worktree issue`, you'll be prompted to choose between GitHub or JIRA for this repository. This preference is stored in git config.
+The first time you run `auto-worktree issue`, you'll be prompted to choose between GitHub, GitLab, JIRA, or Linear for this repository. This preference is stored in git config.
 
 **GitHub Issues:**
 ```bash
 auto-worktree issue        # Select from open issues
+auto-worktree issue 42     # Work on issue #42 directly
+```
+
+Creates a branch like `work/42-fix-login-bug` and launches your AI agent.
+
+**GitLab Issues:**
+```bash
+auto-worktree issue        # Select from open GitLab issues
 auto-worktree issue 42     # Work on issue #42 directly
 ```
 
@@ -93,6 +115,14 @@ auto-worktree issue PROJ-123    # Work on JIRA-123 directly
 ```
 
 Creates a branch like `work/PROJ-123-implement-feature` and launches your AI agent.
+
+**Linear Issues:**
+```bash
+auto-worktree issue             # Select from open Linear issues
+auto-worktree issue TEAM-123    # Work on Linear issue TEAM-123 directly
+```
+
+Creates a branch like `work/TEAM-123-implement-feature` and launches your AI agent.
 
 ### Review a Pull Request
 
@@ -120,12 +150,21 @@ Issue provider settings are stored per-repository using git config:
 
 ```bash
 # View current configuration
-git config --get auto-worktree.issue-provider   # github or jira
+git config --get auto-worktree.issue-provider   # github, gitlab, jira, or linear
 
-# Manual configuration
+# Manual configuration for JIRA
 git config auto-worktree.issue-provider jira
 git config auto-worktree.jira-server https://your-company.atlassian.net
 git config auto-worktree.jira-project PROJ      # Optional: default project filter
+
+# Manual configuration for GitLab
+git config auto-worktree.issue-provider gitlab
+git config auto-worktree.gitlab-server https://gitlab.example.com  # Optional: for self-hosted
+git config auto-worktree.gitlab-project group/project  # Optional: default project filter
+
+# Manual configuration for Linear
+git config auto-worktree.issue-provider linear
+git config auto-worktree.linear-team TEAM       # Optional: default team filter
 ```
 
 Different repositories can use different issue providers.
@@ -172,6 +211,26 @@ auto-worktree issue PROJ-456
 # Later, when JIRA ticket is marked as Done
 auto-worktree list
 # Shows "[resolved PROJ-456]" indicator, prompts to clean up
+```
+
+### Linear Workflow
+
+```bash
+# First time setup
+cd my-product-project
+auto-worktree issue
+# Choose "Linear Issues" from the menu
+# Optionally enter default team key
+
+# Start work on a Linear issue
+auto-worktree issue TEAM-789
+
+# AI agent opens in ~/worktrees/my-product-project/work-TEAM-789-add-feature/
+# Make changes, commit, push
+
+# Later, when Linear issue is marked as Done
+auto-worktree list
+# Shows "[completed TEAM-789]" indicator, prompts to clean up
 ```
 
 ## Tab Completion
