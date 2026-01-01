@@ -997,8 +997,9 @@ _aw_configure_issue_templates() {
 
   # Ask if user wants to specify custom directory
   if gum confirm "Specify a custom templates directory?"; then
-    local custom_dir=$(gum input --placeholder "$default_dir" \
-      --header "Templates directory path:")
+    echo ""
+    gum style --foreground 6 "Templates directory path:"
+    local custom_dir=$(gum input --placeholder "$default_dir")
 
     if [[ -n "$custom_dir" ]]; then
       if [[ -d "$custom_dir" ]]; then
@@ -1036,9 +1037,9 @@ _aw_configure_jira() {
 
   # Get JIRA server URL
   local current_server=$(_aw_get_jira_server)
+  gum style --foreground 6 "JIRA Server URL:"
   local server=$(gum input --placeholder "https://your-company.atlassian.net" \
-    --value "$current_server" \
-    --header "JIRA Server URL:")
+    --value "$current_server")
 
   if [[ -z "$server" ]]; then
     gum style --foreground 3 "Cancelled"
@@ -1049,9 +1050,10 @@ _aw_configure_jira() {
 
   # Get default JIRA project key
   local current_project=$(_aw_get_jira_project)
+  echo ""
+  gum style --foreground 6 "Default JIRA Project Key (optional, can filter issues):"
   local project=$(gum input --placeholder "PROJ" \
-    --value "$current_project" \
-    --header "Default JIRA Project Key (optional, can filter issues):")
+    --value "$current_project")
 
   if [[ -n "$project" ]]; then
     _aw_set_jira_project "$project"
@@ -3025,7 +3027,9 @@ _aw_create_issue_jira() {
   local project=$(_aw_get_jira_project)
 
   if [[ -z "$project" ]]; then
-    project=$(gum input --placeholder "PROJ" --header "JIRA Project Key:")
+    echo ""
+    gum style --foreground 6 "JIRA Project Key:"
+    project=$(gum input --placeholder "PROJ")
     if [[ -z "$project" ]]; then
       gum style --foreground 1 "Error: Project key is required"
       return 1
@@ -3060,7 +3064,9 @@ _aw_create_issue_linear() {
   local team=$(_aw_get_linear_team)
 
   if [[ -z "$team" ]]; then
-    team=$(gum input --placeholder "TEAM" --header "Linear Team Key:")
+    echo ""
+    gum style --foreground 6 "Linear Team Key:"
+    team=$(gum input --placeholder "TEAM")
     if [[ -z "$team" ]]; then
       gum style --foreground 1 "Error: Team key is required"
       return 1
@@ -3094,10 +3100,10 @@ _aw_manual_template_walkthrough() {
   # For now, use gum write to let user edit the template
   echo ""
   gum style --foreground 6 "Edit the issue template:"
+  gum style --foreground 8 "Fill in the template sections (Ctrl+D when done, Ctrl+C to cancel)"
   echo ""
 
-  body=$(echo "$template_content" | gum write --width 80 --height 20 \
-    --placeholder "Fill in the template sections (Ctrl+D when done, Ctrl+C to cancel)...")
+  body=$(echo "$template_content" | gum write --width 80 --height 20)
 
   # Check if user cancelled
   if [[ $? -ne 0 ]]; then
@@ -3254,8 +3260,9 @@ _aw_fill_template_section_by_section() {
     fi
 
     # Ask user to provide content for this section, pre-populated with template content
+    gum style --foreground 6 "Fill in or edit this section (Ctrl+D when done, Ctrl+C to cancel, leave blank to skip):"
+    echo ""
     local section_content=$(echo "$section_template_content" | gum write --width 80 --height 15 \
-      --placeholder "Fill in or edit this section (Ctrl+D when done, Ctrl+C to cancel)" \
       --char-limit 0)
 
     # Check if user cancelled
@@ -3263,11 +3270,13 @@ _aw_fill_template_section_by_section() {
       return 1
     fi
 
-    # Add section to filled content
-    filled_content+="## ${section_name}
+    # Only add section to filled content if it's not blank
+    if [[ -n "$section_content" ]]; then
+      filled_content+="## ${section_name}
 ${section_content}
 
 "
+    fi
   done <<< "$sections"
 
   echo "$filled_content"
@@ -3400,7 +3409,8 @@ _aw_create_issue() {
 
     # Get title/prompt
     echo ""
-    title=$(gum input --placeholder "Issue title or brief description" --header "Enter issue title/prompt:" --width 80)
+    gum style --foreground 6 "Enter issue title/prompt:"
+    title=$(gum input --placeholder "Issue title or brief description" --width 80)
 
     if [[ $? -ne 0 ]] || [[ -z "$title" ]]; then
       gum style --foreground 3 "Cancelled"
@@ -3459,8 +3469,9 @@ _aw_create_issue() {
               # Let user review and edit the AI-generated content
               echo ""
               gum style --foreground 6 "AI-generated content (review and edit if needed):"
-              body=$(cat "$ai_output_file" | gum write --width 80 --height 20 \
-                --placeholder "Review and edit AI-generated content (Ctrl+D when done, Ctrl+C to cancel)...")
+              gum style --foreground 8 "Ctrl+D when done, Ctrl+C to cancel"
+              echo ""
+              body=$(cat "$ai_output_file" | gum write --width 80 --height 20)
               if [[ $? -ne 0 ]]; then
                 rm "$ai_output_file"
                 gum style --foreground 3 "Issue creation cancelled"
@@ -3470,8 +3481,10 @@ _aw_create_issue() {
             else
               # Fall back to manual input
               echo ""
-              body=$(gum write --width 80 --height 15 \
-                --placeholder "Enter issue description (Ctrl+D to finish, Ctrl+C to cancel)...")
+              gum style --foreground 6 "Enter issue description:"
+              gum style --foreground 8 "Ctrl+D to finish, Ctrl+C to cancel"
+              echo ""
+              body=$(gum write --width 80 --height 15)
               if [[ $? -ne 0 ]]; then
                 gum style --foreground 3 "Issue creation cancelled"
                 return 0
@@ -3479,8 +3492,10 @@ _aw_create_issue() {
             fi
           else
             echo ""
-            body=$(gum write --width 80 --height 15 \
-              --placeholder "Enter issue description (Ctrl+D to finish, Ctrl+C to cancel)...")
+            gum style --foreground 6 "Enter issue description:"
+            gum style --foreground 8 "Ctrl+D to finish, Ctrl+C to cancel"
+            echo ""
+            body=$(gum write --width 80 --height 15)
             if [[ $? -ne 0 ]]; then
               gum style --foreground 3 "Issue creation cancelled"
               return 0
@@ -3499,8 +3514,9 @@ _aw_create_issue() {
                 # Let user review and edit AI-generated content
                 echo ""
                 gum style --foreground 6 "AI-generated content (review and edit if needed):"
-                body=$(cat "$ai_output_file" | gum write --width 80 --height 20 --char-limit 0 \
-                  --placeholder "Review and edit AI-generated content (Ctrl+D when done, Ctrl+C to cancel)...")
+                gum style --foreground 8 "Ctrl+D when done, Ctrl+C to cancel"
+                echo ""
+                body=$(cat "$ai_output_file" | gum write --width 80 --height 20 --char-limit 0)
                 if [[ $? -ne 0 ]]; then
                   rm "$ai_output_file"
                   gum style --foreground 3 "Issue creation cancelled"
@@ -3548,8 +3564,9 @@ _aw_create_issue() {
           if [[ -n "$ai_output_file" ]] && [[ -f "$ai_output_file" ]]; then
             echo ""
             gum style --foreground 6 "AI-generated content (review and edit if needed):"
-            body=$(cat "$ai_output_file" | gum write --width 80 --height 20 \
-              --placeholder "Review and edit AI-generated content (Ctrl+D when done, Ctrl+C to cancel)...")
+            gum style --foreground 8 "Ctrl+D when done, Ctrl+C to cancel"
+            echo ""
+            body=$(cat "$ai_output_file" | gum write --width 80 --height 20)
             if [[ $? -ne 0 ]]; then
               rm "$ai_output_file"
               gum style --foreground 3 "Issue creation cancelled"
@@ -3558,8 +3575,10 @@ _aw_create_issue() {
             rm "$ai_output_file"
           else
             echo ""
-            body=$(gum write --width 80 --height 15 \
-              --placeholder "Enter issue description (Ctrl+D to finish, Ctrl+C to cancel)...")
+            gum style --foreground 6 "Enter issue description:"
+            gum style --foreground 8 "Ctrl+D to finish, Ctrl+C to cancel"
+            echo ""
+            body=$(gum write --width 80 --height 15)
             if [[ $? -ne 0 ]]; then
               gum style --foreground 3 "Issue creation cancelled"
               return 0
@@ -3567,8 +3586,10 @@ _aw_create_issue() {
           fi
         else
           echo ""
-          body=$(gum write --width 80 --height 15 \
-            --placeholder "Enter issue description (Ctrl+D to finish)...")
+          gum style --foreground 6 "Enter issue description:"
+          gum style --foreground 8 "Ctrl+D to finish"
+          echo ""
+          body=$(gum write --width 80 --height 15)
           if [[ $? -ne 0 ]]; then
             gum style --foreground 3 "Issue creation cancelled"
             return 0
@@ -3583,8 +3604,9 @@ _aw_create_issue() {
         if [[ -n "$ai_output_file" ]] && [[ -f "$ai_output_file" ]]; then
           echo ""
           gum style --foreground 6 "AI-generated content (review and edit if needed):"
-          body=$(cat "$ai_output_file" | gum write --width 80 --height 20 \
-            --placeholder "Review and edit AI-generated content (Ctrl+D when done, Ctrl+C to cancel)...")
+          gum style --foreground 8 "Ctrl+D when done, Ctrl+C to cancel"
+          echo ""
+          body=$(cat "$ai_output_file" | gum write --width 80 --height 20)
           if [[ $? -ne 0 ]]; then
             rm "$ai_output_file"
             gum style --foreground 3 "Issue creation cancelled"
@@ -3593,8 +3615,10 @@ _aw_create_issue() {
           rm "$ai_output_file"
         else
           echo ""
-          body=$(gum write --width 80 --height 15 \
-            --placeholder "Enter issue description (Ctrl+D to finish)...")
+          gum style --foreground 6 "Enter issue description:"
+          gum style --foreground 8 "Ctrl+D to finish"
+          echo ""
+          body=$(gum write --width 80 --height 15)
           if [[ $? -ne 0 ]]; then
             gum style --foreground 3 "Issue creation cancelled"
             return 0
@@ -3602,8 +3626,10 @@ _aw_create_issue() {
         fi
       else
         echo ""
-        body=$(gum write --width 80 --height 15 \
-          --placeholder "Enter issue description (Ctrl+D to finish)...")
+        gum style --foreground 6 "Enter issue description:"
+        gum style --foreground 8 "Ctrl+D to finish"
+        echo ""
+        body=$(gum write --width 80 --height 15)
         if [[ $? -ne 0 ]]; then
           gum style --foreground 3 "Issue creation cancelled"
           return 0
@@ -4003,7 +4029,8 @@ _aw_issue() {
   fi
 
   echo ""
-  local branch_name=$(gum input --value "$suggested" --placeholder "Branch name" --header "Confirm branch name:")
+  gum style --foreground 6 "Confirm branch name:"
+  local branch_name=$(gum input --value "$suggested" --placeholder "Branch name")
 
   if [[ -z "$branch_name" ]]; then
     gum style --foreground 3 "Cancelled"
