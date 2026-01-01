@@ -1576,8 +1576,8 @@ _aw_run_git_hooks() {
 
   # Find all hook directories
   local hook_paths=()
-  while IFS= read -r path; do
-    hook_paths+=("$path")
+  while IFS= read -r hook_dir_path; do
+    hook_paths+=("$hook_dir_path")
   done < <(_aw_find_hook_paths "$worktree_path")
 
   if [[ ${#hook_paths[@]} -eq 0 ]]; then
@@ -1586,7 +1586,8 @@ _aw_run_git_hooks() {
   fi
 
   # Define hooks to run in order
-  local hooks_to_run=("post-checkout" "post-clone" "post-worktree")
+  # Note: post-checkout is already run by git automatically during worktree creation
+  local hooks_to_run=("post-clone" "post-worktree")
 
   # Check for custom hooks config
   local custom_hooks=$(git -C "$worktree_path" config auto-worktree.custom-hooks 2>/dev/null)
