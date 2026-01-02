@@ -9,6 +9,8 @@ import (
 
 func TestMain(t *testing.T) {
 	if os.Getenv("GO_TEST_PROCESS") == "1" {
+		// Clear os.Args to simulate no arguments
+		os.Args = []string{"auto-worktree"}
 		main()
 		return
 	}

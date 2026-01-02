@@ -8,15 +8,23 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 	"github.com/kaeawc/auto-worktree/internal/git"
+	"github.com/kaeawc/auto-worktree/internal/ui"
 )
 
 const version = "0.1.0-dev"
 
 func main() {
+	// If no arguments provided, launch interactive mode if we have a TTY
 	if len(os.Args) < 2 {
-		showHelp()
-		os.Exit(0)
+		if term.IsTerminal(os.Stdin.Fd()) {
+			runInteractiveMode()
+		} else {
+			showHelp()
+		}
+		return
 	}
 
 	command := os.Args[1]
@@ -26,8 +34,14 @@ func main() {
 		fmt.Printf("auto-worktree version %s\n", version)
 	case "help", "--help", "-h":
 		showHelp()
+	case "interactive", "-i":
+		runInteractiveMode()
 	case "list", "ls":
-		cmdList()
+		if hasFlag("--interactive") {
+			cmdListInteractive()
+		} else {
+			cmdList()
+		}
 	case "new", "create":
 		cmdNew()
 	case "remove", "rm":
@@ -41,14 +55,206 @@ func main() {
 	}
 }
 
+// hasFlag checks if a flag is present in os.Args
+func hasFlag(flag string) bool {
+	for _, arg := range os.Args {
+		if arg == flag {
+			return true
+		}
+	}
+	return false
+}
+
+// runInteractiveMode launches the main interactive TUI menu
+func runInteractiveMode() {
+	for {
+		mainMenu := ui.NewMainMenuModel()
+		p := tea.NewProgram(mainMenu, tea.WithAltScreen())
+
+		model, err := p.Run()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error running interactive mode: %v\n", err)
+			os.Exit(1)
+		}
+
+		m := model.(ui.MainMenuModel)
+		action := m.GetChoice()
+
+		switch action {
+		case ui.ActionListWorktrees:
+			cmdListInteractive()
+		case ui.ActionNewWorktree:
+			// TODO: Implement interactive new worktree flow
+			fmt.Println("\n" + ui.InfoStyle.Render("New worktree creation coming soon!"))
+			fmt.Println("For now, use: auto-worktree new <branch-name>")
+			fmt.Println()
+		case ui.ActionRemoveWorktree:
+			// TODO: Implement interactive remove worktree flow
+			fmt.Println("\n" + ui.InfoStyle.Render("Interactive worktree removal coming soon!"))
+			fmt.Println("For now, use: auto-worktree remove <path>")
+			fmt.Println()
+		case ui.ActionPruneWorktrees:
+			cmdPruneInteractive()
+		case ui.ActionSettings:
+			runSettingsMenu()
+		case ui.ActionQuit:
+			fmt.Println("\n" + ui.SuccessStyle.Render("Goodbye!"))
+			return
+		default:
+			return
+		}
+	}
+}
+
+// runSettingsMenu launches the settings menu
+func runSettingsMenu() {
+	for {
+		settingsMenu := ui.NewSettingsMenuModel()
+		p := tea.NewProgram(settingsMenu, tea.WithAltScreen())
+
+		model, err := p.Run()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error running settings menu: %v\n", err)
+			return
+		}
+
+		m := model.(ui.SettingsMenuModel)
+		action := m.GetChoice()
+
+		switch action {
+		case ui.SettingsActionIssueProvider:
+			runProviderSelection()
+		case ui.SettingsActionAITool:
+			runAIToolSelection()
+		case ui.SettingsActionGitHubSettings:
+			fmt.Println("\n" + ui.InfoStyle.Render("GitHub settings coming soon!"))
+			fmt.Println()
+		case ui.SettingsActionGitLabSettings:
+			fmt.Println("\n" + ui.InfoStyle.Render("GitLab settings coming soon!"))
+			fmt.Println()
+		case ui.SettingsActionJiraSettings:
+			fmt.Println("\n" + ui.InfoStyle.Render("JIRA settings coming soon!"))
+			fmt.Println()
+		case ui.SettingsActionLinearSettings:
+			fmt.Println("\n" + ui.InfoStyle.Render("Linear settings coming soon!"))
+			fmt.Println()
+		case ui.SettingsActionAutoSelect:
+			fmt.Println("\n" + ui.InfoStyle.Render("Auto-select settings coming soon!"))
+			fmt.Println()
+		case ui.SettingsActionBack:
+			return
+		default:
+			return
+		}
+	}
+}
+
+// runProviderSelection shows the provider selection menu
+func runProviderSelection() {
+	providerMenu := ui.NewProviderMenuModel()
+	p := tea.NewProgram(providerMenu, tea.WithAltScreen())
+
+	model, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running provider selection: %v\n", err)
+		return
+	}
+
+	m := model.(ui.ProviderMenuModel)
+	provider := m.GetChoice()
+
+	if provider != "" {
+		// TODO: Save to git config
+		fmt.Println("\n" + ui.SuccessStyle.Render("Provider set to: "+string(provider)))
+		fmt.Println(ui.InfoStyle.Render("(Note: Provider integration coming soon)"))
+		fmt.Println()
+	}
+}
+
+// runAIToolSelection shows the AI tool selection menu
+func runAIToolSelection() {
+	aiToolMenu := ui.NewAIToolMenuModel()
+	p := tea.NewProgram(aiToolMenu, tea.WithAltScreen())
+
+	model, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running AI tool selection: %v\n", err)
+		return
+	}
+
+	m := model.(ui.AIToolMenuModel)
+	tool := m.GetChoice()
+
+	if tool != "" {
+		// TODO: Save to git config
+		fmt.Println("\n" + ui.SuccessStyle.Render("AI tool set to: "+string(tool)))
+		fmt.Println(ui.InfoStyle.Render("(Note: AI tool integration coming soon)"))
+		fmt.Println()
+	}
+}
+
+// cmdListInteractive shows an interactive list of worktrees
+func cmdListInteractive() {
+	repo, err := git.NewRepository()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	worktreeList, err := ui.NewWorktreeListModel(repo)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	p := tea.NewProgram(worktreeList, tea.WithAltScreen())
+	model, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error running interactive list: %v\n", err)
+		os.Exit(1)
+	}
+
+	m := model.(ui.WorktreeListModel)
+	if choice := m.GetChoice(); choice != nil {
+		// User selected a worktree
+		fmt.Println("\n" + ui.InfoStyle.Render(fmt.Sprintf("Selected worktree: %s", choice.Path)))
+		fmt.Printf("\nTo switch to this worktree:\n")
+		fmt.Printf("  cd %s\n", choice.Path)
+		fmt.Println()
+	}
+}
+
+// cmdPruneInteractive shows a confirmation dialog before pruning
+func cmdPruneInteractive() {
+	confirmModel := ui.NewConfirmModel("Are you sure you want to prune orphaned worktrees?")
+	p := tea.NewProgram(confirmModel)
+
+	model, err := p.Run()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		return
+	}
+
+	m := model.(ui.ConfirmModel)
+	if m.GetChoice() {
+		cmdPrune()
+	} else {
+		fmt.Println("\n" + ui.InfoStyle.Render("Prune cancelled"))
+		fmt.Println()
+	}
+}
+
 func showHelp() {
 	help := `auto-worktree - Git worktree management tool
 
 USAGE:
+    auto-worktree                      Launch interactive mode (default)
     auto-worktree <command> [arguments]
 
 COMMANDS:
+    interactive, -i       Launch interactive TUI menu
     list, ls              List all worktrees with status
+    list --interactive    List worktrees in interactive mode
     new <branch>          Create new worktree with new branch
     new --existing <branch>
                          Create worktree for existing branch
@@ -58,8 +264,14 @@ COMMANDS:
     help                 Show this help message
 
 EXAMPLES:
-    # List all worktrees
+    # Launch interactive mode
+    auto-worktree
+
+    # List all worktrees (plain text)
     auto-worktree list
+
+    # List worktrees (interactive)
+    auto-worktree list --interactive
 
     # Create a new worktree with a new branch
     auto-worktree new feature/new-feature
