@@ -94,6 +94,7 @@ func (m ProviderMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
 		m.list.SetHeight(msg.Height - 2)
+
 		return m, nil
 
 	case tea.KeyMsg:
@@ -218,6 +219,7 @@ func (m AIToolMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
 		m.list.SetHeight(msg.Height - 2)
+
 		return m, nil
 
 	case tea.KeyMsg:

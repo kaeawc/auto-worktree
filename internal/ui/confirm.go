@@ -33,6 +33,7 @@ func (m ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+c", "q", "esc":
 			m.quitting = true
 			m.choice = false
+
 			return m, tea.Quit
 
 		case "left", "h":
@@ -45,17 +46,20 @@ func (m ConfirmModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.selected = 0
 			m.choice = true
 			m.quitting = true
+
 			return m, tea.Quit
 
 		case "n":
 			m.selected = 1
 			m.choice = false
 			m.quitting = true
+
 			return m, tea.Quit
 
 		case "enter":
 			m.choice = m.selected == 0
 			m.quitting = true
+
 			return m, tea.Quit
 		}
 	}
