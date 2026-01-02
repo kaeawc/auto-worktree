@@ -2118,7 +2118,7 @@ func offerResumeWorktree(wt *git.Worktree, issue *github.Issue) error {
 }
 
 // selectGitLabIssueInteractive shows a filterable list of GitLab issues
-func selectGitLabIssueInteractive(client *gitlab.Client, repo *git.Repository) (int, error) {
+func selectGitLabIssueInteractive(client *gitlab.Client, _ *git.Repository) (int, error) {
 	issues, err := client.ListOpenIssues(25)
 	if err != nil {
 		return 0, fmt.Errorf("failed to list issues: %w", err)
@@ -2623,7 +2623,7 @@ func tryInstallTmux() bool {
 }
 
 // startAISessionGitLab starts an AI tool in a background tmux session for GitLab
-func startAISessionGitLab(worktreePath, branchName, rootPath string, issue *gitlab.Issue) error {
+func startAISessionGitLab(worktreePath, branchName, rootPath string, _ *gitlab.Issue) error {
 	// Initialize session manager
 	sessionMgr := session.NewManager()
 	if !sessionMgr.IsAvailable() {
