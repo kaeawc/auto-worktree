@@ -109,8 +109,7 @@ func (g *githubProviderShim) ListIssues(ctx context.Context, limit int) ([]provi
 func (g *githubProviderShim) GetIssue(ctx context.Context, id string) (*providers.Issue, error) {
 	// Parse issue number from ID
 	var issueNum int
-	//nolint:errcheck
-	fmt.Sscanf(id, "%d", &issueNum)
+	_, _ = fmt.Sscanf(id, "%d", &issueNum) //nolint:gosec,errcheck
 
 	issue, err := g.client.GetIssue(issueNum)
 	if err != nil {
@@ -135,8 +134,7 @@ func (g *githubProviderShim) GetIssue(ctx context.Context, id string) (*provider
 
 func (g *githubProviderShim) IsIssueClosed(ctx context.Context, id string) (bool, error) {
 	var issueNum int
-	//nolint:errcheck
-	fmt.Sscanf(id, "%d", &issueNum)
+	_, _ = fmt.Sscanf(id, "%d", &issueNum) //nolint:gosec,errcheck
 	return g.client.IsIssueMerged(issueNum)
 }
 
@@ -251,8 +249,7 @@ func (g *gitlabProviderShim) ListIssues(ctx context.Context, limit int) ([]provi
 
 func (g *gitlabProviderShim) GetIssue(ctx context.Context, id string) (*providers.Issue, error) {
 	var issueID int
-	//nolint:errcheck
-	fmt.Sscanf(id, "%d", &issueID)
+	_, _ = fmt.Sscanf(id, "%d", &issueID) //nolint:gosec,errcheck
 
 	issue, err := g.client.GetIssue(issueID)
 	if err != nil {
@@ -272,8 +269,7 @@ func (g *gitlabProviderShim) GetIssue(ctx context.Context, id string) (*provider
 
 func (g *gitlabProviderShim) IsIssueClosed(ctx context.Context, id string) (bool, error) {
 	var issueID int
-	//nolint:errcheck
-	fmt.Sscanf(id, "%d", &issueID)
+	_, _ = fmt.Sscanf(id, "%d", &issueID) //nolint:gosec,errcheck
 	return g.client.IsIssueClosed(issueID)
 }
 

@@ -709,10 +709,12 @@ func selectIssueInteractiveGeneric(ctx context.Context, provider providers.Provi
 	// Get selection from user
 	fmt.Print("\nEnter issue number (or 'q' to quit): ")
 	var input string
-	fmt.Scanln(&input)
+	if _, err := fmt.Scanln(&input); err != nil {
+		return nil, fmt.Errorf("failed to read input: %w", err)
+	}
 
 	if input == "q" || input == "" {
-		return nil, fmt.Errorf("cancelled")
+		return nil, fmt.Errorf("canceled")
 	}
 
 	// Parse selection
@@ -1814,7 +1816,9 @@ func setupJIRAInteractive(cfg *git.Config, scope git.ConfigScope) error {
 	// Ask for JIRA server URL
 	fmt.Print("Enter your JIRA server URL (e.g., https://company.atlassian.net): ")
 	var server string
-	fmt.Scanln(&server)
+	if _, err := fmt.Scanln(&server); err != nil {
+		return fmt.Errorf("failed to read JIRA server: %w", err)
+	}
 	if server != "" {
 		if err := cfg.Set(git.ConfigJiraServer, server, scope); err != nil {
 			fmt.Printf("Error saving JIRA server: %v\n", err)
@@ -1828,7 +1832,9 @@ func setupJIRAInteractive(cfg *git.Config, scope git.ConfigScope) error {
 	// Ask for JIRA project key
 	fmt.Print("Enter your default JIRA project key (e.g., PROJ, optional): ")
 	var project string
-	fmt.Scanln(&project)
+	if _, err := fmt.Scanln(&project); err != nil {
+		return fmt.Errorf("failed to read JIRA project: %w", err)
+	}
 	if project != "" {
 		if err := cfg.Set(git.ConfigJiraProject, project, scope); err != nil {
 			fmt.Printf("Error saving JIRA project: %v\n", err)
@@ -1846,7 +1852,9 @@ func setupJIRAInteractive(cfg *git.Config, scope git.ConfigScope) error {
 
 // isJiraCLIAvailable checks if jira CLI is installed
 func isJiraCLIAvailable() bool {
-	cmd := exec.Command("jira", "version")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "jira", "version")
 	return cmd.Run() == nil
 }
 

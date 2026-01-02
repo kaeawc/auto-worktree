@@ -1,3 +1,4 @@
+// Package jira provides JIRA issue provider implementation using jira-cli.
 package jira
 
 import (
@@ -6,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"time"
 )
 
 var (
@@ -45,14 +47,18 @@ func NewClientWithExecutor(server, project string, executor Executor) (*Client, 
 
 // IsInstalled checks if jira CLI is installed
 func IsInstalled() bool {
-	cmd := exec.Command("jira", "version")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "jira", "version")
 	err := cmd.Run()
 	return err == nil
 }
 
 // IsConfigured checks if jira CLI is configured
 func IsConfigured() error {
-	cmd := exec.Command("jira", "config")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "jira", "config")
 	err := cmd.Run()
 	if err != nil {
 		return ErrJiraNotConfigured
