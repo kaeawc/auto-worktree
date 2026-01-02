@@ -307,11 +307,14 @@ func RunIssue(issueID string) error {
 
 	// 6. Check if issue is closed/merged
 	if issue.State == "CLOSED" {
-		merged, _ := client.IsIssueMerged(issueNum)
-		if merged {
+		merged, err := client.IsIssueMerged(issueNum)
+		if err != nil {
+			fmt.Printf("Warning: Could not check merge status: %v\n", err)
+		} else if merged {
 			return fmt.Errorf("issue #%d is already closed and merged", issueNum)
+		} else {
+			fmt.Printf("Warning: Issue #%d is closed but not merged\n", issueNum)
 		}
-		fmt.Printf("Warning: Issue #%d is closed but not merged\n", issueNum)
 	}
 
 	// 7. Generate branch name: work/<number>-<sanitized-title>
@@ -475,7 +478,11 @@ func selectIssueInteractive(client *github.Client, repo *git.Repository) (int, e
 	for i, issue := range issues {
 		// Check if worktree exists for this issue
 		branchName := issue.BranchName()
-		wt, _ := repo.GetWorktreeForBranch(branchName)
+		wt, err := repo.GetWorktreeForBranch(branchName)
+		if err != nil {
+			// Ignore error, just mark as no worktree
+			wt = nil
+		}
 
 		// Extract label names
 		labelNames := make([]string, len(issue.Labels))

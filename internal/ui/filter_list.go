@@ -32,7 +32,7 @@ func (i FilterableListItem) Number() int {
 	return i.number
 }
 
-// Implement list.Item interface
+// Title returns the title for the list item display.
 func (i FilterableListItem) Title() string {
 	prefix := ""
 	if i.hasWorktree {
@@ -41,6 +41,7 @@ func (i FilterableListItem) Title() string {
 	return fmt.Sprintf("%s#%d | %s", prefix, i.number, i.title)
 }
 
+// Description returns the description for the list item display.
 func (i FilterableListItem) Description() string {
 	if len(i.labels) == 0 {
 		return ""
@@ -52,6 +53,7 @@ func (i FilterableListItem) Description() string {
 	return strings.Join(labelStrs, " ")
 }
 
+// FilterValue returns the value used for filtering the list item.
 func (i FilterableListItem) FilterValue() string {
 	// Allow filtering by number or title
 	return fmt.Sprintf("%d %s", i.number, i.title)
