@@ -230,6 +230,21 @@ func (c *Config) GetBoolWithDefault(key string, defaultValue bool, scope ConfigS
 	return value
 }
 
+// GetIntWithDefault retrieves an integer configuration value, returning defaultValue if not set or invalid
+func (c *Config) GetIntWithDefault(key string, defaultValue int, scope ConfigScope) int {
+	value, err := c.Get(key, scope)
+	if err != nil || value == "" {
+		return defaultValue
+	}
+
+	intValue, err := strconv.Atoi(value)
+	if err != nil || intValue <= 0 {
+		return defaultValue
+	}
+
+	return intValue
+}
+
 // SetBool sets a boolean configuration value
 func (c *Config) SetBool(key string, value bool, scope ConfigScope) error {
 	return c.Set(key, strconv.FormatBool(value), scope)

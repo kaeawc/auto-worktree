@@ -671,7 +671,10 @@ func RunCreate() error {
 	}
 
 	sessionName := session.GenerateSessionName(branchName)
-	exists, _ := sessionMgr.HasSession(sessionName)
+	exists, err := sessionMgr.HasSession(sessionName)
+	if err != nil {
+		return fmt.Errorf("failed to check session existence: %w", err)
+	}
 
 	if !exists {
 		fmt.Println("\nSetting up tmux session...")
@@ -2171,26 +2174,26 @@ func tryInstallTmux() bool {
 			fmt.Println("❌ Homebrew not found. Please install Homebrew from https://brew.sh")
 			return false
 		}
-		cmd = exec.Command("brew", "install", "tmux")
+		cmd = exec.CommandContext(context.Background(), "brew", "install", "tmux")
 
 	case "linux":
 		if isAptBasedLinux() {
-			cmd = exec.Command("sudo", "apt", "update")
+			cmd = exec.CommandContext(context.Background(), "sudo", "apt", "update")
 			if err := cmd.Run(); err != nil {
 				fmt.Printf("❌ Failed to update package manager: %v\n", err)
 				return false
 			}
-			cmd = exec.Command("sudo", "apt", "install", "-y", "tmux")
+			cmd = exec.CommandContext(context.Background(), "sudo", "apt", "install", "-y", "tmux")
 		} else if isRpmBasedLinux() {
 			// Try dnf first (newer), then yum
 			_, err := exec.LookPath("dnf")
 			if err == nil {
-				cmd = exec.Command("sudo", "dnf", "install", "-y", "tmux")
+				cmd = exec.CommandContext(context.Background(), "sudo", "dnf", "install", "-y", "tmux")
 			} else {
-				cmd = exec.Command("sudo", "yum", "install", "-y", "tmux")
+				cmd = exec.CommandContext(context.Background(), "sudo", "yum", "install", "-y", "tmux")
 			}
 		} else if isPacmanBasedLinux() {
-			cmd = exec.Command("sudo", "pacman", "-S", "--noconfirm", "tmux")
+			cmd = exec.CommandContext(context.Background(), "sudo", "pacman", "-S", "--noconfirm", "tmux")
 		} else {
 			fmt.Println("❌ No supported package manager found")
 			return false
@@ -2355,7 +2358,7 @@ func RunSessions() error {
 		fmt.Printf("\n❌ Error: %v\n", err)
 		fmt.Println("This session may have been closed or terminated.")
 		fmt.Println("\nPress Enter to return to the menu...")
-		fmt.Scanln()
+		_, _ = fmt.Scanln() //nolint:errcheck
 		return nil
 	}
 

@@ -13,6 +13,7 @@ import (
 // Status represents the state of a session
 type Status string
 
+// Session status constants
 const (
 	StatusRunning        Status = "running"
 	StatusPaused         Status = "paused"
@@ -109,7 +110,7 @@ func (s *FileMetadataStore) SaveMetadata(metadata *Metadata) error {
 
 	// Rename to final path
 	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath) // Clean up temporary file
+		_ = os.Remove(tmpPath) //nolint:errcheck // Cleanup attempt on failure
 		return fmt.Errorf("failed to save metadata: %w", err)
 	}
 
@@ -182,7 +183,7 @@ func (s *FileMetadataStore) LoadAllMetadata() ([]*Metadata, error) {
 		return nil, err
 	}
 
-	var metadataList []*Metadata
+	metadataList := make([]*Metadata, 0, len(sessionNames))
 	for _, sessionName := range sessionNames {
 		metadata, err := s.LoadMetadata(sessionName)
 		if err != nil {

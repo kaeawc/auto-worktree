@@ -2,7 +2,6 @@ package session
 
 import (
 	"os"
-	"strconv"
 
 	"github.com/kaeawc/auto-worktree/internal/git"
 )
@@ -39,58 +38,74 @@ func DefaultTmuxConfig() *TmuxConfig {
 	}
 }
 
+// tmuxConfigLoader handles loading tmux configuration from git config
+type tmuxConfigLoader struct {
+	repo *git.Repository
+	cfg  *TmuxConfig
+}
+
+// newTmuxConfigLoader creates a new loader with defaults
+func newTmuxConfigLoader(repo *git.Repository) *tmuxConfigLoader {
+	return &tmuxConfigLoader{
+		repo: repo,
+		cfg:  DefaultTmuxConfig(),
+	}
+}
+
+// load loads all configuration values and returns the config
+func (l *tmuxConfigLoader) load() *TmuxConfig {
+	if l.repo == nil {
+		return l.cfg
+	}
+
+	l.loadBooleanConfigs()
+	l.loadStringConfigs()
+	l.loadIntegerConfigs()
+
+	return l.cfg
+}
+
+// loadBooleanConfigs loads all boolean configuration keys
+func (l *tmuxConfigLoader) loadBooleanConfigs() {
+	l.cfg.Enabled = l.repo.Config.GetBoolWithDefault(
+		git.ConfigTmuxEnabled, l.cfg.Enabled, git.ConfigScopeAuto)
+
+	l.cfg.AutoInstall = l.repo.Config.GetBoolWithDefault(
+		git.ConfigTmuxAutoInstall, l.cfg.AutoInstall, git.ConfigScopeAuto)
+
+	l.cfg.LogCommands = l.repo.Config.GetBoolWithDefault(
+		git.ConfigTmuxLogCommands, l.cfg.LogCommands, git.ConfigScopeAuto)
+}
+
+// loadStringConfigs loads all string configuration keys
+func (l *tmuxConfigLoader) loadStringConfigs() {
+	l.cfg.Layout = l.repo.Config.GetWithDefault(
+		git.ConfigTmuxLayout, l.cfg.Layout, git.ConfigScopeAuto)
+
+	l.cfg.Shell = l.repo.Config.GetWithDefault(
+		git.ConfigTmuxShell, l.cfg.Shell, git.ConfigScopeAuto)
+
+	l.cfg.PostCreateHook = l.repo.Config.GetWithDefault(
+		git.ConfigTmuxPostCreateHook, l.cfg.PostCreateHook, git.ConfigScopeAuto)
+
+	l.cfg.PostResumeHook = l.repo.Config.GetWithDefault(
+		git.ConfigTmuxPostResumeHook, l.cfg.PostResumeHook, git.ConfigScopeAuto)
+
+	l.cfg.PreKillHook = l.repo.Config.GetWithDefault(
+		git.ConfigTmuxPreKillHook, l.cfg.PreKillHook, git.ConfigScopeAuto)
+}
+
+// loadIntegerConfigs loads all integer configuration keys
+func (l *tmuxConfigLoader) loadIntegerConfigs() {
+	l.cfg.WindowCount = l.repo.Config.GetIntWithDefault(
+		git.ConfigTmuxWindowCount, l.cfg.WindowCount, git.ConfigScopeAuto)
+
+	l.cfg.IdleThreshold = l.repo.Config.GetIntWithDefault(
+		git.ConfigTmuxIdleThreshold, l.cfg.IdleThreshold, git.ConfigScopeAuto)
+}
+
 // LoadTmuxConfig loads tmux configuration from git config
 func LoadTmuxConfig(repo *git.Repository) (*TmuxConfig, error) {
-	config := DefaultTmuxConfig()
-
-	if repo == nil {
-		return config, nil
-	}
-
-	// Load each configuration key with fallback to defaults
-	if enabled, err := repo.Config.Get(git.ConfigTmuxEnabled, git.ConfigScopeAuto); err == nil && enabled != "" {
-		config.Enabled = enabled == "true"
-	}
-
-	if autoInstall, err := repo.Config.Get(git.ConfigTmuxAutoInstall, git.ConfigScopeAuto); err == nil && autoInstall != "" {
-		config.AutoInstall = autoInstall == "true"
-	}
-
-	if layout, err := repo.Config.Get(git.ConfigTmuxLayout, git.ConfigScopeAuto); err == nil && layout != "" {
-		config.Layout = layout
-	}
-
-	if shell, err := repo.Config.Get(git.ConfigTmuxShell, git.ConfigScopeAuto); err == nil && shell != "" {
-		config.Shell = shell
-	}
-
-	if windowCount, err := repo.Config.Get(git.ConfigTmuxWindowCount, git.ConfigScopeAuto); err == nil && windowCount != "" {
-		if count, err := strconv.Atoi(windowCount); err == nil && count > 0 {
-			config.WindowCount = count
-		}
-	}
-
-	if idleThreshold, err := repo.Config.Get(git.ConfigTmuxIdleThreshold, git.ConfigScopeAuto); err == nil && idleThreshold != "" {
-		if threshold, err := strconv.Atoi(idleThreshold); err == nil && threshold > 0 {
-			config.IdleThreshold = threshold
-		}
-	}
-
-	if logCommands, err := repo.Config.Get(git.ConfigTmuxLogCommands, git.ConfigScopeAuto); err == nil && logCommands != "" {
-		config.LogCommands = logCommands == "true"
-	}
-
-	if postCreate, err := repo.Config.Get(git.ConfigTmuxPostCreateHook, git.ConfigScopeAuto); err == nil && postCreate != "" {
-		config.PostCreateHook = postCreate
-	}
-
-	if postResume, err := repo.Config.Get(git.ConfigTmuxPostResumeHook, git.ConfigScopeAuto); err == nil && postResume != "" {
-		config.PostResumeHook = postResume
-	}
-
-	if preKill, err := repo.Config.Get(git.ConfigTmuxPreKillHook, git.ConfigScopeAuto); err == nil && preKill != "" {
-		config.PreKillHook = preKill
-	}
-
-	return config, nil
+	loader := newTmuxConfigLoader(repo)
+	return loader.load(), nil
 }

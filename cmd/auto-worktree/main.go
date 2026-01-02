@@ -14,7 +14,7 @@ const version = "0.1.0-dev"
 
 func main() {
 	// Prune orphaned worktrees on startup (silently)
-	_ = pruneOrphanedWorktrees()
+	_ = pruneOrphanedWorktrees() //nolint:errcheck
 
 	// If no arguments, show interactive menu
 	if len(os.Args) < 2 {

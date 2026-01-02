@@ -99,7 +99,7 @@ func (m *Manager) createTmuxSession(name, workingDir string, command []string) e
 		"-s", name, // Session name
 		"-c", workingDir, // Working directory
 		"-x", "200", // Terminal width
-		"-y", "50",  // Terminal height
+		"-y", "50", // Terminal height
 	}
 	args = append(args, command...)
 

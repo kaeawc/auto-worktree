@@ -2,6 +2,8 @@ package session
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -438,3 +440,87 @@ func (f *FakeSessionCleaner) GetCleanupCalledWithOpts() *CleanupOptions {
 
 	return f.cleanupCalledWithOpts
 }
+
+// FakeFileSystem is a fake implementation of FileSystem for testing
+type FakeFileSystem struct {
+	mu           sync.RWMutex
+	files        map[string]bool  // path -> exists
+	removeErrors map[string]error // path -> error to return
+	removeCount  int
+}
+
+// NewFakeFileSystem creates a new fake file system instance
+func NewFakeFileSystem() *FakeFileSystem {
+	return &FakeFileSystem{
+		files:        make(map[string]bool),
+		removeErrors: make(map[string]error),
+	}
+}
+
+// ReadDir returns mock directory entries
+func (f *FakeFileSystem) ReadDir(name string) ([]os.DirEntry, error) {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+
+	var entries []os.DirEntry
+	for path := range f.files {
+		if filepath.Dir(path) == name && f.files[path] {
+			entries = append(entries, &fakeDirEntry{
+				name: filepath.Base(path),
+			})
+		}
+	}
+	return entries, nil
+}
+
+// Remove removes a file from the fake filesystem
+func (f *FakeFileSystem) Remove(name string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.removeCount++
+
+	if err, ok := f.removeErrors[name]; ok {
+		return err
+	}
+
+	delete(f.files, name)
+	return nil
+}
+
+// Join joins path elements
+func (f *FakeFileSystem) Join(elem ...string) string {
+	return filepath.Join(elem...)
+}
+
+// AddFile adds a mock file to the fake filesystem
+func (f *FakeFileSystem) AddFile(path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.files[path] = true
+}
+
+// SetRemoveError sets an error to return for a specific file removal
+func (f *FakeFileSystem) SetRemoveError(path string, err error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.removeErrors[path] = err
+}
+
+// GetRemoveCount returns the number of times Remove was called
+func (f *FakeFileSystem) GetRemoveCount() int {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.removeCount
+}
+
+// fakeDirEntry implements os.DirEntry for testing
+type fakeDirEntry struct {
+	name  string
+	isDir bool
+}
+
+func (f *fakeDirEntry) Name() string               { return f.name }
+func (f *fakeDirEntry) IsDir() bool                { return f.isDir }
+func (f *fakeDirEntry) Type() os.FileMode          { return 0 }
+func (f *fakeDirEntry) Info() (os.FileInfo, error) { return nil, nil }

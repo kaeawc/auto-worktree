@@ -1,5 +1,7 @@
 package session
 
+import "os"
+
 // Testing Guide for Session Package
 //
 // This package uses interface-based design to enable easy testing with fake
@@ -159,4 +161,16 @@ type SessionCleaner interface {
 
 	// CleanupOrphanedMetadataFiles removes orphaned metadata files
 	CleanupOrphanedMetadataFiles(opts *CleanupOptions) error
+}
+
+// FileSystem abstracts filesystem operations for testing
+type FileSystem interface {
+	// ReadDir reads the named directory
+	ReadDir(name string) ([]os.DirEntry, error)
+
+	// Remove removes the named file or empty directory
+	Remove(name string) error
+
+	// Join joins path elements into a single path
+	Join(elem ...string) string
 }
