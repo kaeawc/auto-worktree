@@ -113,17 +113,17 @@ func (p *Provider) IsIssueClosed(ctx context.Context, id string) (bool, error) {
 }
 
 // ListPullRequests is not applicable for JIRA
-func (p *Provider) ListPullRequests(ctx context.Context, limit int) ([]providers.PullRequest, error) {
+func (p *Provider) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {
 	return nil, fmt.Errorf("JIRA does not have pull requests")
 }
 
 // GetPullRequest is not applicable for JIRA
-func (p *Provider) GetPullRequest(ctx context.Context, id string) (*providers.PullRequest, error) {
+func (p *Provider) GetPullRequest(_ context.Context, _ string) (*providers.PullRequest, error) {
 	return nil, fmt.Errorf("JIRA does not have pull requests")
 }
 
 // IsPullRequestMerged is not applicable for JIRA
-func (p *Provider) IsPullRequestMerged(ctx context.Context, id string) (bool, error) {
+func (p *Provider) IsPullRequestMerged(_ context.Context, _ string) (bool, error) {
 	return false, fmt.Errorf("JIRA does not have pull requests")
 }
 
@@ -151,7 +151,7 @@ func (p *Provider) CreateIssue(ctx context.Context, title, body string) (*provid
 }
 
 // CreatePullRequest is not applicable for JIRA
-func (p *Provider) CreatePullRequest(ctx context.Context, title, body, baseBranch, headBranch string) (*providers.PullRequest, error) {
+func (p *Provider) CreatePullRequest(_ context.Context, _, _, _, _ string) (*providers.PullRequest, error) {
 	return nil, fmt.Errorf("JIRA does not support pull requests")
 }
 

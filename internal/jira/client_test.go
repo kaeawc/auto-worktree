@@ -27,7 +27,7 @@ func NewMockExecutor() *MockExecutor {
 }
 
 // Execute executes a command and returns output
-func (m *MockExecutor) Execute(ctx context.Context, args ...string) (string, error) {
+func (m *MockExecutor) Execute(_ context.Context, args ...string) (string, error) {
 	m.calls = append(m.calls, ExecutorCall{Args: args})
 
 	// Build key from first arg

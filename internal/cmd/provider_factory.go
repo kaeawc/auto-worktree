@@ -14,6 +14,12 @@ import (
 	"github.com/kaeawc/auto-worktree/internal/providers/stubs"
 )
 
+const (
+	providerGitHub = "github"
+	providerGitLab = "gitlab"
+	providerJira   = "jira"
+)
+
 // GetProviderForRepository returns the appropriate provider for the given repository
 // based on configuration or auto-detection
 func GetProviderForRepository(repo *git.Repository) (providers.Provider, error) {
@@ -22,11 +28,11 @@ func GetProviderForRepository(repo *git.Repository) (providers.Provider, error) 
 	providerType := cfg.GetIssueProvider()
 
 	switch providerType {
-	case "github":
+	case providerGitHub:
 		return newGitHubProvider(repo)
-	case "gitlab":
+	case providerGitLab:
 		return newGitLabProvider(repo)
-	case "jira":
+	case providerJira:
 		return newJIRAProvider()
 	case "linear":
 		return nil, errors.New("linear provider not yet implemented")
@@ -79,7 +85,7 @@ type githubProviderShim struct {
 	client *github.Client
 }
 
-func (g *githubProviderShim) ListIssues(ctx context.Context, limit int) ([]providers.Issue, error) {
+func (g *githubProviderShim) ListIssues(_ context.Context, limit int) ([]providers.Issue, error) {
 	issues, err := g.client.ListOpenIssues(limit)
 	if err != nil {
 		return nil, err
@@ -106,7 +112,7 @@ func (g *githubProviderShim) ListIssues(ctx context.Context, limit int) ([]provi
 	return result, nil
 }
 
-func (g *githubProviderShim) GetIssue(ctx context.Context, id string) (*providers.Issue, error) {
+func (g *githubProviderShim) GetIssue(_ context.Context, id string) (*providers.Issue, error) {
 	// Parse issue number from ID
 	var issueNum int
 	_, _ = fmt.Sscanf(id, "%d", &issueNum) //nolint:gosec,errcheck
@@ -132,25 +138,25 @@ func (g *githubProviderShim) GetIssue(ctx context.Context, id string) (*provider
 	}, nil
 }
 
-func (g *githubProviderShim) IsIssueClosed(ctx context.Context, id string) (bool, error) {
+func (g *githubProviderShim) IsIssueClosed(_ context.Context, id string) (bool, error) {
 	var issueNum int
 	_, _ = fmt.Sscanf(id, "%d", &issueNum) //nolint:gosec,errcheck
 	return g.client.IsIssueMerged(issueNum)
 }
 
-func (g *githubProviderShim) ListPullRequests(ctx context.Context, limit int) ([]providers.PullRequest, error) {
+func (g *githubProviderShim) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (g *githubProviderShim) GetPullRequest(ctx context.Context, id string) (*providers.PullRequest, error) {
+func (g *githubProviderShim) GetPullRequest(_ context.Context, _ string) (*providers.PullRequest, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (g *githubProviderShim) IsPullRequestMerged(ctx context.Context, id string) (bool, error) {
+func (g *githubProviderShim) IsPullRequestMerged(_ context.Context, _ string) (bool, error) {
 	return false, errors.New("not implemented")
 }
 
-func (g *githubProviderShim) CreateIssue(ctx context.Context, title, body string) (*providers.Issue, error) {
+func (g *githubProviderShim) CreateIssue(_ context.Context, title, body string) (*providers.Issue, error) {
 	issue, err := g.client.CreateIssue(title, body)
 	if err != nil {
 		return nil, err
@@ -164,7 +170,7 @@ func (g *githubProviderShim) CreateIssue(ctx context.Context, title, body string
 	}, nil
 }
 
-func (g *githubProviderShim) CreatePullRequest(ctx context.Context, title, body, baseBranch, headBranch string) (*providers.PullRequest, error) {
+func (g *githubProviderShim) CreatePullRequest(_ context.Context, _, _, _, _ string) (*providers.PullRequest, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -225,7 +231,7 @@ type gitlabProviderShim struct {
 	client *gitlab.Client
 }
 
-func (g *gitlabProviderShim) ListIssues(ctx context.Context, limit int) ([]providers.Issue, error) {
+func (g *gitlabProviderShim) ListIssues(_ context.Context, limit int) ([]providers.Issue, error) {
 	issues, err := g.client.ListOpenIssues(limit)
 	if err != nil {
 		return nil, err
@@ -247,7 +253,7 @@ func (g *gitlabProviderShim) ListIssues(ctx context.Context, limit int) ([]provi
 	return result, nil
 }
 
-func (g *gitlabProviderShim) GetIssue(ctx context.Context, id string) (*providers.Issue, error) {
+func (g *gitlabProviderShim) GetIssue(_ context.Context, id string) (*providers.Issue, error) {
 	var issueID int
 	_, _ = fmt.Sscanf(id, "%d", &issueID) //nolint:gosec,errcheck
 
@@ -267,25 +273,25 @@ func (g *gitlabProviderShim) GetIssue(ctx context.Context, id string) (*provider
 	}, nil
 }
 
-func (g *gitlabProviderShim) IsIssueClosed(ctx context.Context, id string) (bool, error) {
+func (g *gitlabProviderShim) IsIssueClosed(_ context.Context, id string) (bool, error) {
 	var issueID int
 	_, _ = fmt.Sscanf(id, "%d", &issueID) //nolint:gosec,errcheck
 	return g.client.IsIssueClosed(issueID)
 }
 
-func (g *gitlabProviderShim) ListPullRequests(ctx context.Context, limit int) ([]providers.PullRequest, error) {
+func (g *gitlabProviderShim) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {
 	return nil, errors.New("use GetMergeRequests instead")
 }
 
-func (g *gitlabProviderShim) GetPullRequest(ctx context.Context, id string) (*providers.PullRequest, error) {
+func (g *gitlabProviderShim) GetPullRequest(_ context.Context, _ string) (*providers.PullRequest, error) {
 	return nil, errors.New("use GetMergeRequest instead")
 }
 
-func (g *gitlabProviderShim) IsPullRequestMerged(ctx context.Context, id string) (bool, error) {
+func (g *gitlabProviderShim) IsPullRequestMerged(_ context.Context, _ string) (bool, error) {
 	return false, errors.New("use IsMergeRequestMerged instead")
 }
 
-func (g *gitlabProviderShim) CreateIssue(ctx context.Context, title, body string) (*providers.Issue, error) {
+func (g *gitlabProviderShim) CreateIssue(_ context.Context, title, body string) (*providers.Issue, error) {
 	issue, err := g.client.CreateIssue(title, body)
 	if err != nil {
 		return nil, err
@@ -299,7 +305,7 @@ func (g *gitlabProviderShim) CreateIssue(ctx context.Context, title, body string
 	}, nil
 }
 
-func (g *gitlabProviderShim) CreatePullRequest(ctx context.Context, title, body, baseBranch, headBranch string) (*providers.PullRequest, error) {
+func (g *gitlabProviderShim) CreatePullRequest(_ context.Context, _, _, _, _ string) (*providers.PullRequest, error) {
 	return nil, errors.New("not implemented")
 }
 
@@ -384,11 +390,11 @@ func autoDetectProvider(repo *git.Repository) (providers.Provider, error) {
 // GetTestProvider returns a stub provider for testing
 func GetTestProvider(providerType string) providers.Provider {
 	switch providerType {
-	case "github":
+	case providerGitHub:
 		return stubs.NewGitHubStub()
-	case "jira":
+	case providerJira:
 		return stubs.NewJIRAStub()
-	case "gitlab":
+	case providerGitLab:
 		return stubs.NewGitLabStub()
 	case "linear":
 		return stubs.NewLinearStub()
