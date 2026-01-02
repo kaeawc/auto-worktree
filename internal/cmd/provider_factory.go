@@ -7,6 +7,7 @@ import (
 
 	"github.com/kaeawc/auto-worktree/internal/git"
 	"github.com/kaeawc/auto-worktree/internal/github"
+	"github.com/kaeawc/auto-worktree/internal/gitlab"
 	"github.com/kaeawc/auto-worktree/internal/jira"
 	"github.com/kaeawc/auto-worktree/internal/providers"
 	"github.com/kaeawc/auto-worktree/internal/providers/stubs"
@@ -23,7 +24,7 @@ func GetProviderForRepository(repo *git.Repository) (providers.Provider, error) 
 	case "github":
 		return newGitHubProvider(repo)
 	case "gitlab":
-		return nil, errors.New("GitLab provider not yet implemented")
+		return newGitLabProvider(repo)
 	case "jira":
 		return newJIRAProvider()
 	case "linear":
@@ -178,6 +179,135 @@ func (g *githubProviderShim) ProviderType() string {
 	return "github"
 }
 
+// newGitLabProvider creates a GitLab provider
+func newGitLabProvider(repo *git.Repository) (providers.Provider, error) {
+	executor := gitlab.NewGitLabExecutor()
+	if !gitlab.IsInstalled(executor) {
+		return nil, errors.New("glab CLI is not installed. Install with: brew install glab")
+	}
+
+	if err := gitlab.IsAuthenticated(executor); err != nil {
+		return nil, errors.New("glab CLI is not authenticated. Run: glab auth login")
+	}
+
+	client, err := gitlab.NewClient(repo.RootPath)
+	if err != nil {
+		if errors.Is(err, gitlab.ErrGlabNotInstalled) {
+			return nil, errors.New("glab CLI is not installed. Install with: brew install glab")
+		}
+		if errors.Is(err, gitlab.ErrGlabNotAuthenticated) {
+			return nil, errors.New("glab CLI is not authenticated. Run: glab auth login")
+		}
+		return nil, fmt.Errorf("failed to initialize GitLab client: %w", err)
+	}
+
+	return newGitLabProviderFromClient(client), nil
+}
+
+// newGitLabProviderFromClient creates a provider wrapper around GitLab client
+func newGitLabProviderFromClient(client *gitlab.Client) providers.Provider {
+	return &gitlabProviderShim{client: client}
+}
+
+// gitlabProviderShim adapts the GitLab client to the providers.Provider interface
+type gitlabProviderShim struct {
+	client *gitlab.Client
+}
+
+func (g *gitlabProviderShim) ListIssues(ctx context.Context, limit int) ([]providers.Issue, error) {
+	issues, err := g.client.ListOpenIssues(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []providers.Issue
+	for _, issue := range issues {
+		result = append(result, providers.Issue{
+			ID:     fmt.Sprintf("%d", issue.IID),
+			Number: issue.IID,
+			Title:  issue.Title,
+			Body:   issue.Description,
+			URL:    issue.WebURL,
+			State:  issue.State,
+			Labels: issue.Labels,
+		})
+	}
+
+	return result, nil
+}
+
+func (g *gitlabProviderShim) GetIssue(ctx context.Context, id string) (*providers.Issue, error) {
+	var issueID int
+	fmt.Sscanf(id, "%d", &issueID)
+
+	issue, err := g.client.GetIssue(issueID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &providers.Issue{
+		ID:     fmt.Sprintf("%d", issue.IID),
+		Number: issue.IID,
+		Title:  issue.Title,
+		Body:   issue.Description,
+		URL:    issue.WebURL,
+		State:  issue.State,
+		Labels: issue.Labels,
+	}, nil
+}
+
+func (g *gitlabProviderShim) IsIssueClosed(ctx context.Context, id string) (bool, error) {
+	var issueID int
+	fmt.Sscanf(id, "%d", &issueID)
+	return g.client.IsIssueClosed(issueID)
+}
+
+func (g *gitlabProviderShim) ListPullRequests(ctx context.Context, limit int) ([]providers.PullRequest, error) {
+	return nil, errors.New("use GetMergeRequests instead")
+}
+
+func (g *gitlabProviderShim) GetPullRequest(ctx context.Context, id string) (*providers.PullRequest, error) {
+	return nil, errors.New("use GetMergeRequest instead")
+}
+
+func (g *gitlabProviderShim) IsPullRequestMerged(ctx context.Context, id string) (bool, error) {
+	return false, errors.New("use IsMergeRequestMerged instead")
+}
+
+func (g *gitlabProviderShim) CreateIssue(ctx context.Context, title, body string) (*providers.Issue, error) {
+	issue, err := g.client.CreateIssue(title, body)
+	if err != nil {
+		return nil, err
+	}
+
+	return &providers.Issue{
+		ID:    fmt.Sprintf("%d", issue.IID),
+		Title: issue.Title,
+		Body:  issue.Description,
+		URL:   issue.WebURL,
+	}, nil
+}
+
+func (g *gitlabProviderShim) CreatePullRequest(ctx context.Context, title, body, baseBranch, headBranch string) (*providers.PullRequest, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (g *gitlabProviderShim) GetBranchNameSuffix(issue *providers.Issue) string {
+	return fmt.Sprintf("%d", issue.Number)
+}
+
+func (g *gitlabProviderShim) SanitizeBranchName(title string) string {
+	return git.SanitizeBranchName(title)
+}
+
+func (g *gitlabProviderShim) Name() string {
+	return "GitLab"
+}
+
+func (g *gitlabProviderShim) ProviderType() string {
+	return "gitlab"
+}
+
 // newJIRAProvider creates a JIRA provider
 func newJIRAProvider() (providers.Provider, error) {
 	if !jira.IsInstalled() {
@@ -219,6 +349,14 @@ func autoDetectProvider(repo *git.Repository) (providers.Provider, error) {
 	if github.IsInstalled(executor) {
 		if client, err := github.NewClient(repo.RootPath); err == nil {
 			return newGitHubProviderFromClient(client), nil
+		}
+	}
+
+	// Try GitLab
+	glabExecutor := gitlab.NewGitLabExecutor()
+	if gitlab.IsInstalled(glabExecutor) {
+		if client, err := gitlab.NewClient(repo.RootPath); err == nil {
+			return newGitLabProviderFromClient(client), nil
 		}
 	}
 
