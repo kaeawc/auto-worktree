@@ -207,11 +207,13 @@ linters:
         linters:
           - wsl
           - gocognit
+          - gocyclo
 
       - path: internal/cmd/commands\.go
         linters:
           - wsl
           - gocognit
+          - gocyclo
           - gocritic
           - govet
 
