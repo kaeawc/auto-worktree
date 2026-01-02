@@ -2,13 +2,16 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kaeawc/auto-worktree/internal/git"
+	"github.com/kaeawc/auto-worktree/internal/github"
 	"github.com/kaeawc/auto-worktree/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -249,9 +252,113 @@ func RunResume() error {
 }
 
 // RunIssue works on an issue.
-func RunIssue(_ string) error {
-	// TODO: Implement issue workflow
-	return fmt.Errorf("'issue' command not yet implemented")
+// If issueID is empty, shows interactive issue selector.
+// If issueID is numeric, directly creates worktree for that issue.
+func RunIssue(issueID string) error {
+	// 1. Initialize repository
+	repo, err := git.NewRepository()
+	if err != nil {
+		return fmt.Errorf("error: %w", err)
+	}
+
+	// 2. Check gh CLI availability
+	if !github.IsInstalled() {
+		return fmt.Errorf("gh CLI is not installed. Install with: brew install gh")
+	}
+
+	// 3. Create GitHub client (auto-detects owner/repo)
+	client, err := github.NewClient(repo.RootPath)
+	if err != nil {
+		if errors.Is(err, github.ErrGHNotInstalled) {
+			return fmt.Errorf("gh CLI is not installed. Install with: brew install gh")
+		}
+		if errors.Is(err, github.ErrGHNotAuthenticated) {
+			return fmt.Errorf("gh CLI is not authenticated. Run: gh auth login")
+		}
+		if errors.Is(err, github.ErrNotGitHubRepo) {
+			return fmt.Errorf("not a GitHub repository")
+		}
+		return fmt.Errorf("failed to initialize GitHub client: %w", err)
+	}
+
+	fmt.Printf("Repository: %s/%s\n\n", client.Owner, client.Repo)
+
+	// 4. Get issue number (interactive or direct)
+	var issueNum int
+	if issueID == "" {
+		// Interactive mode: show issue selector
+		issueNum, err = selectIssueInteractive(client, repo)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Direct mode: parse issue number
+		issueNum, err = parseIssueNumber(issueID)
+		if err != nil {
+			return fmt.Errorf("invalid issue number: %s", issueID)
+		}
+	}
+
+	// 5. Fetch full issue details
+	issue, err := client.GetIssue(issueNum)
+	if err != nil {
+		return fmt.Errorf("failed to fetch issue #%d: %w", issueNum, err)
+	}
+
+	// 6. Check if issue is closed/merged
+	if issue.State == "CLOSED" {
+		merged, _ := client.IsIssueMerged(issueNum)
+		if merged {
+			return fmt.Errorf("issue #%d is already closed and merged", issueNum)
+		}
+		fmt.Printf("Warning: Issue #%d is closed but not merged\n", issueNum)
+	}
+
+	// 7. Generate branch name: work/<number>-<sanitized-title>
+	branchName := issue.BranchName()
+
+	// 8. Check if worktree already exists
+	existingWt, err := repo.GetWorktreeForBranch(branchName)
+	if err != nil {
+		return fmt.Errorf("error checking for existing worktree: %w", err)
+	}
+
+	if existingWt != nil {
+		// Offer to resume existing worktree
+		return offerResumeWorktree(existingWt, issue)
+	}
+
+	// 9. Create worktree
+	worktreePath := filepath.Join(repo.WorktreeBase, git.SanitizeBranchName(branchName))
+
+	// Check if branch exists
+	if repo.BranchExists(branchName) {
+		fmt.Printf("Creating worktree for existing branch: %s\n", branchName)
+		if err := repo.CreateWorktree(worktreePath, branchName); err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
+	} else {
+		defaultBranch, err := repo.GetDefaultBranch()
+		if err != nil {
+			return fmt.Errorf("error getting default branch: %w", err)
+		}
+
+		fmt.Printf("Creating worktree for issue #%d: %s\n", issue.Number, issue.Title)
+		fmt.Printf("Branch: %s (from %s)\n", branchName, defaultBranch)
+
+		if err := repo.CreateWorktreeWithNewBranch(worktreePath, branchName, defaultBranch); err != nil {
+			return fmt.Errorf("failed to create worktree: %w", err)
+		}
+	}
+
+	// 10. Display success message
+	fmt.Printf("\n✓ Worktree created at: %s\n", worktreePath)
+	fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
+	fmt.Printf("URL: %s\n", issue.URL)
+	fmt.Printf("\nTo start working:\n")
+	fmt.Printf("  cd %s\n", worktreePath)
+
+	return nil
 }
 
 // RunCreate creates a new issue.
@@ -346,4 +453,83 @@ func formatAge(d time.Duration) string {
 	default:
 		return fmt.Sprintf("%dm", minutes)
 	}
+}
+
+// Helper functions for RunIssue
+
+// selectIssueInteractive shows a filterable list of issues and returns the selected issue number
+func selectIssueInteractive(client *github.Client, repo *git.Repository) (int, error) {
+	// Fetch issues
+	fmt.Println("Fetching issues...")
+	issues, err := client.ListOpenIssues(100)
+	if err != nil {
+		return 0, fmt.Errorf("failed to fetch issues: %w", err)
+	}
+
+	if len(issues) == 0 {
+		return 0, fmt.Errorf("no open issues found")
+	}
+
+	// Convert to filterable list items
+	items := make([]ui.FilterableListItem, len(issues))
+	for i, issue := range issues {
+		// Check if worktree exists for this issue
+		branchName := issue.BranchName()
+		wt, _ := repo.GetWorktreeForBranch(branchName)
+
+		// Extract label names
+		labelNames := make([]string, len(issue.Labels))
+		for j, label := range issue.Labels {
+			labelNames[j] = label.Name
+		}
+
+		items[i] = ui.NewFilterableListItem(
+			issue.Number,
+			issue.Title,
+			labelNames,
+			wt != nil,
+		)
+	}
+
+	// Show filterable list
+	filterList := ui.NewFilterList("Select an issue to work on", items)
+	p := tea.NewProgram(filterList, tea.WithAltScreen())
+
+	m, err := p.Run()
+	if err != nil {
+		return 0, fmt.Errorf("failed to run issue selector: %w", err)
+	}
+
+	finalModel, ok := m.(ui.FilterListModel)
+	if !ok {
+		return 0, fmt.Errorf("unexpected model type")
+	}
+
+	if finalModel.Err() != nil {
+		return 0, finalModel.Err()
+	}
+
+	choice := finalModel.Choice()
+	if choice == nil {
+		return 0, fmt.Errorf("no issue selected")
+	}
+
+	return choice.Number(), nil
+}
+
+// parseIssueNumber parses an issue number from a string, handling "#" prefix
+func parseIssueNumber(s string) (int, error) {
+	// Remove # prefix if present
+	s = strings.TrimPrefix(s, "#")
+	return strconv.Atoi(s)
+}
+
+// offerResumeWorktree displays information about an existing worktree for an issue
+func offerResumeWorktree(wt *git.Worktree, issue *github.Issue) error {
+	fmt.Printf("Worktree already exists for issue #%d\n", issue.Number)
+	fmt.Printf("Path: %s\n", wt.Path)
+	fmt.Printf("Branch: %s\n", wt.Branch)
+	fmt.Printf("\nTo resume working:\n")
+	fmt.Printf("  cd %s\n", wt.Path)
+	return nil
 }
