@@ -283,6 +283,12 @@ func (r *Repository) CreateWorktree(path, branchName string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create worktree: %w", err)
 	}
+
+	// Execute git hooks after worktree creation
+	if err := r.executeWorktreeHooks(path); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -292,6 +298,12 @@ func (r *Repository) CreateWorktreeWithNewBranch(path, branchName, baseBranch st
 	if err != nil {
 		return fmt.Errorf("failed to create worktree with new branch: %w", err)
 	}
+
+	// Execute git hooks after worktree creation
+	if err := r.executeWorktreeHooks(path); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -327,4 +339,24 @@ func (r *Repository) GetWorktreeForBranch(branchName string) (*Worktree, error) 
 	}
 
 	return nil, nil
+}
+
+// executeWorktreeHooks executes git hooks after worktree creation
+func (r *Repository) executeWorktreeHooks(worktreePath string) error {
+	// Skip hook execution if Config is not initialized (e.g., in tests)
+	if r.Config == nil {
+		return nil
+	}
+
+	// Create hook manager with Config already initialized
+	hookManager := NewHookManager(
+		r.RootPath,
+		r.Config,
+		r.executor,
+		NewHookExecutor(),
+		os.Stdout,
+	)
+
+	// Execute post-checkout, post-worktree, and custom hooks
+	return hookManager.ExecuteWorktreeHooks(worktreePath)
 }

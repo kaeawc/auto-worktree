@@ -294,6 +294,28 @@ func (c *Config) GetFailOnHookError() bool {
 	return c.GetBoolWithDefault(ConfigFailOnHookError, false, ConfigScopeAuto)
 }
 
+// GetCustomHooks returns the list of custom hooks to execute
+// Parses space or comma-separated hook names from configuration
+func (c *Config) GetCustomHooks() []string {
+	value := c.GetWithDefault(ConfigCustomHooks, "", ConfigScopeAuto)
+	if value == "" {
+		return []string{}
+	}
+
+	// Replace commas with spaces for uniform parsing
+	value = strings.ReplaceAll(value, ",", " ")
+
+	// Split on whitespace and filter empty strings
+	var hooks []string
+	for _, hook := range strings.Fields(value) {
+		if hook != "" {
+			hooks = append(hooks, hook)
+		}
+	}
+
+	return hooks
+}
+
 // GetAutoInstall returns whether to automatically install dependencies (default: true)
 func (c *Config) GetAutoInstall() bool {
 	return c.GetBoolWithDefault(ConfigAutoInstall, true, ConfigScopeAuto)
