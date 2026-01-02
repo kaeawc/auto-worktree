@@ -12,7 +12,8 @@ import (
 // HookExecutor defines the interface for executing git hooks
 type HookExecutor interface {
 	// Execute runs a hook script with the given parameters and streams output
-	Execute(hookPath string, params []string, env []string, output io.Writer) error
+	// workingDir is the directory where the hook should be executed
+	Execute(hookPath string, params []string, env []string, workingDir string, output io.Writer) error
 	// IsExecutable checks if a file exists and is executable
 	IsExecutable(path string) bool
 }
@@ -26,9 +27,10 @@ func NewHookExecutor() HookExecutor {
 }
 
 // Execute runs a hook script with the given parameters
-func (e *RealHookExecutor) Execute(hookPath string, params []string, env []string, output io.Writer) error {
+func (e *RealHookExecutor) Execute(hookPath string, params []string, env []string, workingDir string, output io.Writer) error {
 	cmd := exec.Command(hookPath, params...)
 	cmd.Env = env
+	cmd.Dir = workingDir
 	cmd.Stdout = output
 	cmd.Stderr = output
 
@@ -140,7 +142,7 @@ func (hm *HookManager) findHook(hookName string) (string, error) {
 }
 
 // executeHook executes a single hook with the given parameters
-func (hm *HookManager) executeHook(hookName string, params []string) error {
+func (hm *HookManager) executeHook(hookName string, params []string, workingDir string) error {
 	hookPath, err := hm.findHook(hookName)
 	if err != nil {
 		return fmt.Errorf("failed to find hook %s: %w", hookName, err)
@@ -169,7 +171,7 @@ func (hm *HookManager) executeHook(hookName string, params []string) error {
 	}
 
 	// Execute the hook
-	if err := hm.hookExecutor.Execute(hookPath, params, env, hm.output); err != nil {
+	if err := hm.hookExecutor.Execute(hookPath, params, env, workingDir, hm.output); err != nil {
 		return fmt.Errorf("hook %s failed: %w", hookName, err)
 	}
 
@@ -203,7 +205,7 @@ func (hm *HookManager) ExecuteWorktreeHooks(worktreePath string) error {
 	}
 
 	// Execute post-checkout hook
-	if err := hm.executeHook("post-checkout", postCheckoutParams); err != nil {
+	if err := hm.executeHook("post-checkout", postCheckoutParams, worktreePath); err != nil {
 		if failOnError {
 			return err
 		}
@@ -211,7 +213,7 @@ func (hm *HookManager) ExecuteWorktreeHooks(worktreePath string) error {
 	}
 
 	// Execute post-worktree hook (no standard parameters)
-	if err := hm.executeHook("post-worktree", []string{}); err != nil {
+	if err := hm.executeHook("post-worktree", []string{}, worktreePath); err != nil {
 		if failOnError {
 			return err
 		}
@@ -221,7 +223,7 @@ func (hm *HookManager) ExecuteWorktreeHooks(worktreePath string) error {
 	// Execute custom hooks
 	customHooks := hm.config.GetCustomHooks()
 	for _, hookName := range customHooks {
-		if err := hm.executeHook(hookName, []string{}); err != nil {
+		if err := hm.executeHook(hookName, []string{}, worktreePath); err != nil {
 			if failOnError {
 				return err
 			}
