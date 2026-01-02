@@ -493,12 +493,14 @@ func TestHookManager_PathEnvironment(t *testing.T) {
 
 	fakeHook := NewFakeHookExecutor()
 	fakeHook.IsExecutableFunc = func(path string) bool {
+		// Normalize path for cross-platform comparison
+		expectedPath := filepath.FromSlash("/test/repo/.git/hooks/post-checkout")
 		// Check exact match or with Windows extensions
-		return path == "/test/repo/.git/hooks/post-checkout" ||
-			path == "/test/repo/.git/hooks/post-checkout.bat" ||
-			path == "/test/repo/.git/hooks/post-checkout.cmd" ||
-			path == "/test/repo/.git/hooks/post-checkout.exe" ||
-			path == "/test/repo/.git/hooks/post-checkout.ps1"
+		return path == expectedPath ||
+			path == expectedPath+".bat" ||
+			path == expectedPath+".cmd" ||
+			path == expectedPath+".exe" ||
+			path == expectedPath+".ps1"
 	}
 
 	output := &bytes.Buffer{}
