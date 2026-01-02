@@ -24,26 +24,26 @@ const (
 
 // Metadata represents persistent session metadata
 type Metadata struct {
-	SessionName       string            `json:"sessionName"`
-	SessionID         string            `json:"sessionId"`
-	SessionType       string            `json:"sessionType"`
-	WorktreePath      string            `json:"worktreePath"`
-	BranchName        string            `json:"branchName"`
-	CreatedAt         time.Time         `json:"createdAt"`
-	LastAccessedAt    time.Time         `json:"lastAccessedAt"`
-	Status            Status            `json:"status"`
-	WindowCount       int               `json:"windowCount"`
-	PaneCount         int               `json:"paneCount"`
-	RootProcessPid    int               `json:"rootProcessPid"`
-	Dependencies      DependenciesInfo  `json:"dependencies"`
-	CustomMetadata    map[string]interface{} `json:"customMetadata,omitempty"`
+	SessionName    string                 `json:"sessionName"`
+	SessionID      string                 `json:"sessionId"`
+	SessionType    string                 `json:"sessionType"`
+	WorktreePath   string                 `json:"worktreePath"`
+	BranchName     string                 `json:"branchName"`
+	CreatedAt      time.Time              `json:"createdAt"`
+	LastAccessedAt time.Time              `json:"lastAccessedAt"`
+	Status         Status                 `json:"status"`
+	WindowCount    int                    `json:"windowCount"`
+	PaneCount      int                    `json:"paneCount"`
+	RootProcessPid int                    `json:"rootProcessPid"`
+	Dependencies   DependenciesInfo       `json:"dependencies"`
+	CustomMetadata map[string]interface{} `json:"customMetadata,omitempty"`
 }
 
 // DependenciesInfo tracks dependency installation state
 type DependenciesInfo struct {
-	Installed      bool   `json:"installed"`
-	ProjectType    string `json:"projectType"`
-	PackageManager string `json:"packageManager"`
+	Installed      bool       `json:"installed"`
+	ProjectType    string     `json:"projectType"`
+	PackageManager string     `json:"packageManager"`
 	InstalledAt    *time.Time `json:"installedAt,omitempty"`
 }
 

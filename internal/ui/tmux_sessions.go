@@ -61,10 +61,10 @@ func (i SessionListItem) Metadata() *session.Metadata {
 
 // SessionListModel represents the sessions list UI component
 type SessionListModel struct {
-	list     list.Model
-	items    []SessionListItem
-	choice   *SessionListItem
-	err      error
+	list      list.Model
+	items     []SessionListItem
+	choice    *SessionListItem
+	err       error
 	filtering bool
 }
 
@@ -84,8 +84,8 @@ func NewSessionList(title string, items []SessionListItem) SessionListModel {
 	l.Styles.Title = HeaderStyle
 
 	return SessionListModel{
-		list:   l,
-		items:  items,
+		list:      l,
+		items:     items,
 		filtering: false,
 	}
 }

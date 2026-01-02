@@ -202,10 +202,10 @@ func TestMetadataStore_LastAccessedAtUpdate(t *testing.T) {
 	beforeSave := time.Now()
 
 	metadata := &Metadata{
-		SessionName: "access-test",
-		SessionType: "tmux",
-		Status:      StatusRunning,
-		CreatedAt:   beforeSave.Add(-1 * time.Hour),
+		SessionName:    "access-test",
+		SessionType:    "tmux",
+		Status:         StatusRunning,
+		CreatedAt:      beforeSave.Add(-1 * time.Hour),
 		LastAccessedAt: beforeSave.Add(-1 * time.Hour),
 	}
 	store.SaveMetadata(metadata)

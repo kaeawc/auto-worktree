@@ -9,16 +9,16 @@ import (
 
 // TmuxConfig holds tmux session configuration
 type TmuxConfig struct {
-	Enabled           bool
-	AutoInstall       bool
-	Layout            string
-	Shell             string
-	WindowCount       int
-	IdleThreshold     int // minutes
-	LogCommands       bool
-	PostCreateHook    string
-	PostResumeHook    string
-	PreKillHook       string
+	Enabled        bool
+	AutoInstall    bool
+	Layout         string
+	Shell          string
+	WindowCount    int
+	IdleThreshold  int // minutes
+	LogCommands    bool
+	PostCreateHook string
+	PostResumeHook string
+	PreKillHook    string
 }
 
 // DefaultTmuxConfig returns default tmux configuration

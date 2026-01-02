@@ -9,13 +9,13 @@ import (
 
 // CleanupResult contains information about cleanup operations
 type CleanupResult struct {
-	TotalSessions     int
-	ActiveSessions    int
-	OrphanedSessions  int
-	IdleSessions      int
-	FailedSessions    int
-	RemovedMetadata   []string
-	Errors            []error
+	TotalSessions    int
+	ActiveSessions   int
+	OrphanedSessions int
+	IdleSessions     int
+	FailedSessions   int
+	RemovedMetadata  []string
+	Errors           []error
 }
 
 // CleanupOptions controls cleanup behavior

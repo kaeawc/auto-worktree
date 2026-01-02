@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 	"github.com/kaeawc/auto-worktree/internal/ai"
 	"github.com/kaeawc/auto-worktree/internal/environment"
 	"github.com/kaeawc/auto-worktree/internal/git"

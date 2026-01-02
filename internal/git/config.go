@@ -43,17 +43,17 @@ const (
 	ConfigPackageManager = "auto-worktree.package-manager"
 
 	// Tmux session management configuration
-	ConfigTmuxEnabled            = "auto-worktree.tmux-enabled"
-	ConfigTmuxAutoInstall        = "auto-worktree.tmux-auto-install"
-	ConfigTmuxLayout             = "auto-worktree.tmux-layout"
-	ConfigTmuxShell              = "auto-worktree.tmux-shell"
-	ConfigTmuxWindowCount        = "auto-worktree.tmux-window-count"
-	ConfigTmuxIdleThreshold      = "auto-worktree.tmux-idle-threshold"
-	ConfigTmuxMetadataDir        = "auto-worktree.tmux-metadata-dir"
-	ConfigTmuxLogCommands        = "auto-worktree.tmux-log-commands"
-	ConfigTmuxPostCreateHook     = "auto-worktree.tmux-post-create-hook"
-	ConfigTmuxPostResumeHook     = "auto-worktree.tmux-post-resume-hook"
-	ConfigTmuxPreKillHook        = "auto-worktree.tmux-pre-kill-hook"
+	ConfigTmuxEnabled        = "auto-worktree.tmux-enabled"
+	ConfigTmuxAutoInstall    = "auto-worktree.tmux-auto-install"
+	ConfigTmuxLayout         = "auto-worktree.tmux-layout"
+	ConfigTmuxShell          = "auto-worktree.tmux-shell"
+	ConfigTmuxWindowCount    = "auto-worktree.tmux-window-count"
+	ConfigTmuxIdleThreshold  = "auto-worktree.tmux-idle-threshold"
+	ConfigTmuxMetadataDir    = "auto-worktree.tmux-metadata-dir"
+	ConfigTmuxLogCommands    = "auto-worktree.tmux-log-commands"
+	ConfigTmuxPostCreateHook = "auto-worktree.tmux-post-create-hook"
+	ConfigTmuxPostResumeHook = "auto-worktree.tmux-post-resume-hook"
+	ConfigTmuxPreKillHook    = "auto-worktree.tmux-pre-kill-hook"
 )
 
 // Valid values for specific configuration keys

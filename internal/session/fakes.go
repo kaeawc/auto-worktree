@@ -8,12 +8,12 @@ import (
 
 // FakeMetadataStore is a fake implementation of MetadataStore for testing
 type FakeMetadataStore struct {
-	mu        sync.RWMutex
-	data      map[string]*Metadata
-	saveCount int
-	loadCount int
+	mu          sync.RWMutex
+	data        map[string]*Metadata
+	saveCount   int
+	loadCount   int
 	deleteCount int
-	errors    map[string]error
+	errors      map[string]error
 }
 
 // NewFakeMetadataStore creates a new fake metadata store
@@ -305,10 +305,10 @@ func (f *FakeSessionOperations) SetAttachError(sessionName string, err error) {
 
 // FakeDependencyInstaller is a fake implementation of DependencyInstaller
 type FakeDependencyInstaller struct {
-	mu          sync.RWMutex
-	result      *DependenciesInfo
-	error       error
-	installPath string
+	mu            sync.RWMutex
+	result        *DependenciesInfo
+	error         error
+	installPath   string
 	progressCalls []string
 }
 

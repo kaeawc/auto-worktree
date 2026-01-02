@@ -28,8 +28,8 @@ type Session struct {
 
 // Manager handles terminal multiplexer sessions
 type Manager struct {
-	sessionType    Type
-	metadataStore  MetadataStore
+	sessionType   Type
+	metadataStore MetadataStore
 }
 
 // NewManager creates a new session manager

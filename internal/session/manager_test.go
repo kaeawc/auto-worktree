@@ -16,13 +16,13 @@ func TestManager_SaveAndLoadSessionMetadata(t *testing.T) {
 
 	// Create test metadata
 	metadata := &Metadata{
-		SessionName:    "test-session",
-		SessionID:      "uuid-123",
-		SessionType:    "tmux",
-		WorktreePath:   "/path/to/worktree",
-		BranchName:     "test-branch",
-		CreatedAt:      time.Now(),
-		Status:         StatusRunning,
+		SessionName:  "test-session",
+		SessionID:    "uuid-123",
+		SessionType:  "tmux",
+		WorktreePath: "/path/to/worktree",
+		BranchName:   "test-branch",
+		CreatedAt:    time.Now(),
+		Status:       StatusRunning,
 	}
 
 	// Save metadata
