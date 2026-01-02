@@ -28,21 +28,43 @@ type Session struct {
 
 // Manager handles terminal multiplexer sessions
 type Manager struct {
-	sessionType Type
+	sessionType    Type
+	metadataStore  MetadataStore
 }
 
 // NewManager creates a new session manager
 // It detects which multiplexer is available (tmux preferred, screen fallback)
 func NewManager() *Manager {
+	sessionType := TypeNone
 	if commandExists("tmux") {
-		return &Manager{sessionType: TypeTmux}
+		sessionType = TypeTmux
+	} else if commandExists("screen") {
+		sessionType = TypeScreen
 	}
 
-	if commandExists("screen") {
-		return &Manager{sessionType: TypeScreen}
+	// Initialize metadata store
+	sessionDir, err := GetSessionDir()
+	if err != nil {
+		// If metadata store initialization fails, continue without it
+		return &Manager{
+			sessionType:   sessionType,
+			metadataStore: nil,
+		}
 	}
 
-	return &Manager{sessionType: TypeNone}
+	metadataStore, err := NewMetadataStore(sessionDir)
+	if err != nil {
+		// If metadata store initialization fails, continue without it
+		return &Manager{
+			sessionType:   sessionType,
+			metadataStore: nil,
+		}
+	}
+
+	return &Manager{
+		sessionType:   sessionType,
+		metadataStore: metadataStore,
+	}
 }
 
 // SessionType returns the session type this manager uses
@@ -367,4 +389,125 @@ func escapeAppleScript(s string) string {
 	s = strings.ReplaceAll(s, "\"", "\\\"")
 
 	return s
+}
+
+// SaveSessionMetadata saves metadata for a session
+func (m *Manager) SaveSessionMetadata(metadata *Metadata) error {
+	if m.metadataStore == nil {
+		return fmt.Errorf("metadata store not available")
+	}
+
+	return m.metadataStore.SaveMetadata(metadata)
+}
+
+// LoadSessionMetadata loads metadata for a session
+func (m *Manager) LoadSessionMetadata(sessionName string) (*Metadata, error) {
+	if m.metadataStore == nil {
+		return nil, fmt.Errorf("metadata store not available")
+	}
+
+	return m.metadataStore.LoadMetadata(sessionName)
+}
+
+// DeleteSessionMetadata removes metadata for a session
+func (m *Manager) DeleteSessionMetadata(sessionName string) error {
+	if m.metadataStore == nil {
+		return fmt.Errorf("metadata store not available")
+	}
+
+	return m.metadataStore.DeleteMetadata(sessionName)
+}
+
+// ListSessionMetadata returns all session metadata
+func (m *Manager) ListSessionMetadata() ([]string, error) {
+	if m.metadataStore == nil {
+		return nil, fmt.Errorf("metadata store not available")
+	}
+
+	return m.metadataStore.ListMetadata()
+}
+
+// LoadAllSessionMetadata loads all session metadata
+func (m *Manager) LoadAllSessionMetadata() ([]*Metadata, error) {
+	if m.metadataStore == nil {
+		return nil, fmt.Errorf("metadata store not available")
+	}
+
+	return m.metadataStore.LoadAllMetadata()
+}
+
+// UpdateSessionStatus updates the status of a session
+func (m *Manager) UpdateSessionStatus(sessionName string, status Status) error {
+	if m.metadataStore == nil {
+		return fmt.Errorf("metadata store not available")
+	}
+
+	return m.metadataStore.UpdateStatus(sessionName, status)
+}
+
+// PauseSession marks a session as paused in metadata
+// Note: The tmux session itself continues running; this just updates the metadata status
+func (m *Manager) PauseSession(sessionName string) error {
+	if err := m.UpdateSessionStatus(sessionName, StatusPaused); err != nil {
+		return fmt.Errorf("failed to pause session: %w", err)
+	}
+
+	return nil
+}
+
+// ResumeSession marks a session as running in metadata
+func (m *Manager) ResumeSession(sessionName string) error {
+	if err := m.UpdateSessionStatus(sessionName, StatusRunning); err != nil {
+		return fmt.Errorf("failed to resume session: %w", err)
+	}
+
+	return nil
+}
+
+// GetSessionStatus returns the current status of a session from metadata
+func (m *Manager) GetSessionStatus(sessionName string) (Status, error) {
+	metadata, err := m.LoadSessionMetadata(sessionName)
+	if err != nil {
+		return StatusUnknown, err
+	}
+
+	return metadata.Status, nil
+}
+
+// MarkSessionFailed marks a session as failed in metadata
+func (m *Manager) MarkSessionFailed(sessionName string) error {
+	return m.UpdateSessionStatus(sessionName, StatusFailed)
+}
+
+// MarkSessionIdle marks a session as idle in metadata
+func (m *Manager) MarkSessionIdle(sessionName string) error {
+	return m.UpdateSessionStatus(sessionName, StatusIdle)
+}
+
+// SyncSessionStatus synchronizes session metadata with actual tmux state
+// This checks if the tmux session still exists and updates status accordingly
+func (m *Manager) SyncSessionStatus(sessionName string) error {
+	// Check if session still exists in tmux
+	exists, err := m.HasSession(sessionName)
+	if err != nil {
+		return err
+	}
+
+	if !exists {
+		// Session no longer exists, mark as failed
+		return m.MarkSessionFailed(sessionName)
+	}
+
+	// If session exists and isn't in a terminal status, ensure it's marked as running
+	currentStatus, err := m.GetSessionStatus(sessionName)
+	if err != nil {
+		return err
+	}
+
+	// If status is failed but session exists, mark as running
+	if currentStatus == StatusFailed {
+		return m.ResumeSession(sessionName)
+	}
+
+	return nil
 }

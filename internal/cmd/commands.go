@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/kaeawc/auto-worktree/internal/ai"
 	"github.com/kaeawc/auto-worktree/internal/environment"
 	"github.com/kaeawc/auto-worktree/internal/git"
@@ -19,8 +21,6 @@ import (
 	"github.com/kaeawc/auto-worktree/internal/hooks"
 	"github.com/kaeawc/auto-worktree/internal/session"
 	"github.com/kaeawc/auto-worktree/internal/ui"
-
-	tea "github.com/charmbracelet/bubbletea"
 )
 
 // RunInteractiveMenu displays the main interactive menu.
@@ -32,6 +32,7 @@ func RunInteractiveMenu() error {
 		ui.NewMenuItem("Create Issue", "Create a new issue and start working on it", "create"),
 		ui.NewMenuItem("Review PR", "Review a pull request in a new worktree", "pr"),
 		ui.NewMenuItem("List Worktrees", "Show all existing worktrees", "list"),
+		ui.NewMenuItem("View Tmux Sessions", "Manage active tmux sessions for worktrees", "sessions"),
 		ui.NewMenuItem("Cleanup Worktrees", "Interactive cleanup of merged/stale worktrees", "cleanup"),
 		ui.NewMenuItem("Settings", "Configure per-repository settings", "settings"),
 	}
@@ -73,6 +74,8 @@ func routeMenuChoice(choice string) error {
 		return RunPR("")
 	case "list":
 		return RunList()
+	case "sessions":
+		return RunSessions()
 	case "cleanup":
 		return RunCleanup()
 	case "settings":
@@ -100,10 +103,20 @@ func RunList() error {
 		return nil
 	}
 
+	// Load session metadata to show tmux status
+	sessionMgr := session.NewManager()
+	sessionMetadataMap := make(map[string]*session.Metadata)
+
+	if allMetadata, err := sessionMgr.LoadAllSessionMetadata(); err == nil {
+		for _, metadata := range allMetadata {
+			sessionMetadataMap[metadata.WorktreePath] = metadata
+		}
+	}
+
 	fmt.Printf("Repository: %s\n", repo.SourceFolder)
 	fmt.Printf("Worktree base: %s\n\n", repo.WorktreeBase)
-	fmt.Printf("%-45s %-20s %-12s %-12s %s\n", "PATH", "BRANCH", "AGE", "STATUS", "UNPUSHED")
-	fmt.Println(strings.Repeat("-", 120))
+	fmt.Printf("%-45s %-20s %-12s %-15s %-10s %s\n", "PATH", "BRANCH", "AGE", "STATUS", "SESSION", "UNPUSHED")
+	fmt.Println(strings.Repeat("-", 130))
 
 	for _, wt := range worktrees {
 		path := wt.Path
@@ -130,7 +143,13 @@ func RunList() error {
 		// Get status indicator
 		status := getStatusIndicator(wt)
 
-		fmt.Printf("%-45s %-20s %-12s %-12s %s\n", path, branch, age, status, unpushed)
+		// Get session status
+		sessionStatus := "-"
+		if metadata, ok := sessionMetadataMap[wt.Path]; ok {
+			sessionStatus = getSessionStatusIndicator(metadata)
+		}
+
+		fmt.Printf("%-45s %-20s %-12s %-15s %-10s %s\n", path, branch, age, status, sessionStatus, unpushed)
 	}
 
 	fmt.Printf("\nTotal: %d worktree(s)\n", len(worktrees))
@@ -151,6 +170,24 @@ func getStatusIndicator(wt *git.Worktree) string {
 		return "[git-merged]"
 	}
 	return "-"
+}
+
+// getSessionStatusIndicator returns an emoji indicator for session status
+func getSessionStatusIndicator(metadata *session.Metadata) string {
+	switch metadata.Status {
+	case session.StatusRunning:
+		return "🟢 running"
+	case session.StatusPaused:
+		return "⏸️  paused"
+	case session.StatusIdle:
+		return "💤 idle"
+	case session.StatusNeedsAttention:
+		return "⚠️  attention"
+	case session.StatusFailed:
+		return "🔴 failed"
+	default:
+		return "❓ unknown"
+	}
 }
 
 // RunNew creates a new worktree.
@@ -601,6 +638,25 @@ func RunCreate() error {
 	setupEnvironment(repo, worktreePath)
 
 	fmt.Printf("\n✓ Worktree created at: %s\n", worktreePath)
+
+	// Create tmux session with metadata and auto-install
+	sessionMgr := session.NewManager()
+	if sessionMgr.IsAvailable() {
+		sessionName := session.GenerateSessionName(branchName)
+		exists, _ := sessionMgr.HasSession(sessionName)
+
+		if !exists {
+			fmt.Println("\nSetting up tmux session...")
+			config := git.NewConfig(repo.RootPath)
+			err := createSessionWithMetadata(sessionMgr, config, sessionName, branchName, worktreePath, []string{"bash"})
+			if err != nil {
+				fmt.Printf("⚠ Warning: Failed to create session: %v\n", err)
+			} else {
+				fmt.Printf("✓ Tmux session created: %s\n", sessionName)
+			}
+		}
+	}
+
 	fmt.Printf("\nTo start working:\n")
 	fmt.Printf("  cd %s\n", worktreePath)
 
@@ -1678,6 +1734,62 @@ func runPostWorktreeHooks(worktreePath, rootPath string) error {
 	return hookRunner.Run()
 }
 
+// generateUUID generates a new UUID string
+func generateUUID() string {
+	return uuid.New().String()
+}
+
+// createSessionWithMetadata creates a tmux/screen session and saves metadata
+func createSessionWithMetadata(sessionMgr session.SessionManager, config *git.Config, sessionName, branchName, worktreePath string, command []string) error {
+	// Create the actual tmux/screen session
+	if err := sessionMgr.CreateSession(sessionName, worktreePath, command); err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+
+	// Create session metadata
+	now := time.Now()
+	metadata := &session.Metadata{
+		SessionName:    sessionName,
+		SessionID:      generateUUID(),
+		SessionType:    string(sessionMgr.SessionType()),
+		WorktreePath:   worktreePath,
+		BranchName:     branchName,
+		CreatedAt:      now,
+		LastAccessedAt: now,
+		Status:         session.StatusRunning,
+		WindowCount:    1,
+		PaneCount:      1,
+		Dependencies: session.DependenciesInfo{
+			Installed: false,
+		},
+	}
+
+	// Save metadata
+	if err := sessionMgr.SaveSessionMetadata(metadata); err != nil {
+		fmt.Printf("⚠ Warning: Failed to save session metadata: %v\n", err)
+		// Don't fail the session creation if metadata save fails
+	}
+
+	// Auto-install dependencies if configured
+	if autoInstall, err := config.GetBool(git.ConfigAutoInstall, git.ConfigScopeAuto); err == nil && autoInstall {
+		fmt.Println("Installing dependencies...")
+		progressFn := func(msg string) {
+			fmt.Printf("  %s\n", msg)
+		}
+
+		if err := session.InstallDependencies(metadata, progressFn); err != nil {
+			fmt.Printf("⚠ Warning: Failed to install dependencies: %v\n", err)
+		} else {
+			// Re-save metadata with updated dependency info
+			if err := sessionMgr.SaveSessionMetadata(metadata); err != nil {
+				fmt.Printf("⚠ Warning: Failed to save updated metadata: %v\n", err)
+			}
+		}
+	}
+
+	return nil
+}
+
 // startAISession starts an AI tool in a background tmux/screen session
 func startAISession(worktreePath, branchName, rootPath string, issue *github.Issue) error {
 	// Initialize session manager
@@ -1722,9 +1834,10 @@ func startAISession(worktreePath, branchName, rootPath string, issue *github.Iss
 		return nil
 	}
 
-	// Create session
+	// Create session with metadata
 	fmt.Printf("\nStarting %s in background session...\n", aiTool.Name)
-	if err := sessionMgr.CreateSession(sessionName, worktreePath, aiTool.Command); err != nil {
+	err = createSessionWithMetadata(sessionMgr, config, sessionName, branchName, worktreePath, aiTool.Command)
+	if err != nil {
 		return fmt.Errorf("failed to create session: %w", err)
 	}
 
@@ -2029,6 +2142,57 @@ func checkoutPRInWorktree(repo *git.Repository, worktreePath, branchName string,
 			fmt.Printf("Warning: Could not clean up worktree: %v\n", removeErr)
 		}
 		return fmt.Errorf("failed to checkout PR #%d: %w", pr.Number, err)
+	}
+
+	return nil
+}
+
+// RunSessions displays and manages active tmux sessions
+func RunSessions() error {
+	mgr := session.NewManager()
+
+	// Load all session metadata
+	metadataList, err := mgr.LoadAllSessionMetadata()
+	if err != nil {
+		return fmt.Errorf("failed to load sessions: %w", err)
+	}
+
+	// If no sessions exist
+	if len(metadataList) == 0 {
+		fmt.Println("No tmux sessions found.")
+		fmt.Println("Create a new worktree or work on an issue to start a session.")
+		return nil
+	}
+
+	// Convert metadata to UI items
+	items := make([]ui.SessionListItem, len(metadataList))
+	for i, metadata := range metadataList {
+		items[i] = ui.NewSessionListItem(metadata)
+	}
+
+	// Show the sessions list
+	list := ui.NewSessionList("Active Tmux Sessions", items)
+	p := tea.NewProgram(list)
+
+	m, err := p.Run()
+	if err != nil {
+		return fmt.Errorf("failed to run sessions UI: %w", err)
+	}
+
+	finalModel, ok := m.(ui.SessionListModel)
+	if !ok {
+		return fmt.Errorf("unexpected model type")
+	}
+
+	choice := finalModel.Choice()
+	if choice == nil {
+		return nil
+	}
+
+	// Attach to the selected session
+	metadata := choice.Metadata()
+	if err := mgr.AttachToSession(metadata.SessionName); err != nil {
+		return fmt.Errorf("failed to attach to session: %w", err)
 	}
 
 	return nil
