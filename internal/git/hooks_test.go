@@ -21,10 +21,11 @@ type FakeHookExecutor struct {
 
 // ExecutedHook records details about an executed hook
 type ExecutedHook struct {
-	Path   string
-	Params []string
-	Env    []string
-	Output string
+	Path       string
+	Params     []string
+	Env        []string
+	WorkingDir string
+	Output     string
 }
 
 // NewFakeHookExecutor creates a new fake hook executor
@@ -36,17 +37,18 @@ func NewFakeHookExecutor() *FakeHookExecutor {
 }
 
 // Execute records the hook execution
-func (e *FakeHookExecutor) Execute(hookPath string, params []string, env []string, output io.Writer) error {
+func (e *FakeHookExecutor) Execute(hookPath string, params []string, env []string, workingDir string, output io.Writer) error {
 	// Write fake output
 	outputStr := "hook output from " + hookPath
 	output.Write([]byte(outputStr))
 
 	// Record execution
 	e.ExecutedHooks = append(e.ExecutedHooks, ExecutedHook{
-		Path:   hookPath,
-		Params: params,
-		Env:    env,
-		Output: outputStr,
+		Path:       hookPath,
+		Params:     params,
+		Env:        env,
+		WorkingDir: workingDir,
+		Output:     outputStr,
 	})
 
 	// Check for configured error
@@ -474,6 +476,54 @@ func TestConfig_GetCustomHooks(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHookManager_WorkingDirectory(t *testing.T) {
+	// Setup fake executors
+	fakeGit := NewFakeGitExecutor()
+	fakeGit.SetResponse("config --local --get --bool auto-worktree.run-hooks", "true")
+	fakeGit.SetResponse("config --global --get --bool auto-worktree.run-hooks", "true")
+	fakeGit.SetResponse("config --local --get --bool auto-worktree.fail-on-hook-error", "false")
+	fakeGit.SetResponse("config --global --get --bool auto-worktree.fail-on-hook-error", "false")
+	fakeGit.SetResponse("config --local --get auto-worktree.custom-hooks", "")
+	fakeGit.SetResponse("config --global --get auto-worktree.custom-hooks", "")
+	fakeGit.SetResponse("rev-parse --git-common-dir", ".git")
+	fakeGit.SetResponse("rev-parse HEAD", "abc123")
+
+	config := NewConfigWithExecutor("/test/repo", fakeGit)
+
+	fakeHook := NewFakeHookExecutor()
+	fakeHook.IsExecutableFunc = func(path string) bool {
+		// Normalize path for cross-platform comparison
+		expectedPath := filepath.FromSlash("/test/repo/.git/hooks/post-checkout")
+		return path == expectedPath ||
+			path == expectedPath+".bat" ||
+			path == expectedPath+".cmd" ||
+			path == expectedPath+".exe" ||
+			path == expectedPath+".ps1"
+	}
+
+	output := &bytes.Buffer{}
+	hm := NewHookManager("/test/repo", config, fakeGit, fakeHook, output)
+
+	// Execute hooks with a specific worktree path
+	worktreePath := "/test/repo/worktrees/test-branch"
+	err := hm.ExecuteWorktreeHooks(worktreePath)
+	if err != nil {
+		t.Fatalf("ExecuteWorktreeHooks() error = %v", err)
+	}
+
+	// Verify hooks were executed
+	if len(fakeHook.ExecutedHooks) == 0 {
+		t.Fatal("No hooks executed")
+	}
+
+	// Verify working directory is set to the worktree path
+	for i, hook := range fakeHook.ExecutedHooks {
+		if hook.WorkingDir != worktreePath {
+			t.Errorf("Hook %d: expected working directory %s, got %s", i, worktreePath, hook.WorkingDir)
+		}
 	}
 }
 
