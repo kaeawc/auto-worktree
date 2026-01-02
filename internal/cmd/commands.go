@@ -560,6 +560,11 @@ func cleanupWorktree(repo *git.Repository, wt *git.Worktree, deleteBranch bool) 
 	return nil
 }
 
+const (
+	scopeLocal  = "local"
+	scopeGlobal = "global"
+)
+
 // RunSettings shows settings menu.
 func RunSettings() error {
 	// Initialize repository and config
@@ -572,10 +577,7 @@ func RunSettings() error {
 
 	// Main settings loop
 	for {
-		settings, err := loadCurrentSettings(cfg)
-		if err != nil {
-			return fmt.Errorf("failed to load settings: %w", err)
-		}
+		settings := loadCurrentSettings(cfg)
 
 		menu := ui.NewSettingsMenuModel(settings)
 		p := tea.NewProgram(menu, tea.WithAltScreen())
@@ -622,7 +624,7 @@ func RunSettings() error {
 	}
 }
 
-func loadCurrentSettings(cfg *git.Config) ([]ui.SettingItem, error) {
+func loadCurrentSettings(cfg *git.Config) []ui.SettingItem {
 	settings := []ui.SettingItem{
 		ui.NewSettingItem(
 			git.ConfigIssueProvider,
@@ -746,7 +748,7 @@ func loadCurrentSettings(cfg *git.Config) ([]ui.SettingItem, error) {
 		),
 	}
 
-	return settings, nil
+	return settings
 }
 
 func editSetting(cfg *git.Config, key string, settings []ui.SettingItem) error {
@@ -817,9 +819,9 @@ func editSetting(cfg *git.Config, key string, settings []ui.SettingItem) error {
 	// Convert scope string to ConfigScope
 	var configScope git.ConfigScope
 	switch scope {
-	case "local":
+	case scopeLocal:
 		configScope = git.ConfigScopeLocal
-	case "global":
+	case scopeGlobal:
 		configScope = git.ConfigScopeGlobal
 	default:
 		return fmt.Errorf("invalid scope: %s", scope)
@@ -988,9 +990,9 @@ func RunSettingsSet(key, value, scope string) error {
 	// Convert scope
 	var configScope git.ConfigScope
 	switch scope {
-	case "local":
+	case scopeLocal:
 		configScope = git.ConfigScopeLocal
-	case "global":
+	case scopeGlobal:
 		configScope = git.ConfigScopeGlobal
 	default:
 		return fmt.Errorf("invalid scope: %s (must be 'local' or 'global')", scope)
@@ -1072,8 +1074,14 @@ func RunSettingsList() error {
 
 	for _, key := range allKeys {
 		shortKey := strings.TrimPrefix(key, "auto-worktree.")
-		localVal, _ := cfg.Get(key, git.ConfigScopeLocal)
-		globalVal, _ := cfg.Get(key, git.ConfigScopeGlobal)
+		localVal, err := cfg.Get(key, git.ConfigScopeLocal)
+		if err != nil {
+			localVal = ""
+		}
+		globalVal, err := cfg.Get(key, git.ConfigScopeGlobal)
+		if err != nil {
+			globalVal = ""
+		}
 
 		if localVal != "" {
 			fmt.Printf("  %s %s %s\n",
@@ -1107,9 +1115,9 @@ func RunSettingsReset(scope string) error {
 	// Convert scope
 	var configScope git.ConfigScope
 	switch scope {
-	case "local":
+	case scopeLocal:
 		configScope = git.ConfigScopeLocal
-	case "global":
+	case scopeGlobal:
 		configScope = git.ConfigScopeGlobal
 	default:
 		return fmt.Errorf("invalid scope: %s (must be 'local' or 'global')", scope)
@@ -1120,7 +1128,10 @@ func RunSettingsReset(scope string) error {
 	fmt.Print("Are you sure? (y/N): ")
 
 	var response string
-	fmt.Scanln(&response)
+	if _, err := fmt.Scanln(&response); err != nil {
+		// If error reading input, default to no
+		response = "n"
+	}
 
 	if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
 		fmt.Println(ui.SubtleStyle.Render("Canceled"))

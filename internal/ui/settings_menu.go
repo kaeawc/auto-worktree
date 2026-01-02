@@ -34,6 +34,7 @@ func (i SettingItem) Title() string {
 	if i.CurrentVal == "" {
 		return fmt.Sprintf("%s: (not set)", i.title)
 	}
+
 	return fmt.Sprintf("%s: %s", i.title, i.CurrentVal)
 }
 
@@ -101,6 +102,7 @@ func (m SettingsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
 		m.list.SetHeight(msg.Height - 2)
+
 		return m, nil
 
 	case tea.KeyMsg:
@@ -117,13 +119,16 @@ func (m SettingsMenuModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case MenuItem:
 				m.choice = i.Action()
 			}
+
 			m.quitting = true
+
 			return m, tea.Quit
 		}
 	}
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+
 	return m, cmd
 }
 
@@ -132,6 +137,7 @@ func (m SettingsMenuModel) View() string {
 	if m.quitting {
 		return ""
 	}
+
 	return "\n" + m.list.View()
 }
 

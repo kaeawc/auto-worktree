@@ -34,9 +34,11 @@ func NewSettingEditor(setting SettingItem) *SettingEditorModel {
 		ti.Placeholder = "Enter value..."
 		ti.Focus()
 		ti.Width = 50
+
 		if setting.CurrentVal != "" {
 			ti.SetValue(setting.CurrentVal)
 		}
+
 		model.textInput = ti
 		model.editingStr = true
 
@@ -81,6 +83,7 @@ func (m SettingEditorModel) Init() tea.Cmd {
 	if m.editingStr {
 		return textinput.Blink
 	}
+
 	return nil
 }
 
@@ -89,6 +92,7 @@ func (m SettingEditorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.editingStr {
 		return m.updateStringEditor(msg)
 	}
+
 	return m.updateListEditor(msg)
 }
 
@@ -100,15 +104,19 @@ func (m SettingEditorModel) updateStringEditor(msg tea.Msg) (tea.Model, tea.Cmd)
 		case tea.KeyEnter:
 			m.newValue = m.textInput.Value()
 			m.quitting = true
+
 			return m, tea.Quit
+
 		case tea.KeyCtrlC, tea.KeyEsc:
 			m.err = fmt.Errorf("canceled")
 			m.quitting = true
+
 			return m, tea.Quit
 		}
 	}
 
 	m.textInput, cmd = m.textInput.Update(msg)
+
 	return m, cmd
 }
 
@@ -117,6 +125,7 @@ func (m SettingEditorModel) updateListEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
 		m.list.SetHeight(msg.Height - 2)
+
 		return m, nil
 
 	case tea.KeyMsg:
@@ -124,12 +133,14 @@ func (m SettingEditorModel) updateListEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case keyCtrlC, "q", keyEsc:
 			m.err = fmt.Errorf("canceled")
 			m.quitting = true
+
 			return m, tea.Quit
 
 		case keyEnter:
 			if item, ok := m.list.SelectedItem().(MenuItem); ok {
 				m.newValue = item.Action()
 				m.quitting = true
+
 				return m, tea.Quit
 			}
 		}
@@ -137,6 +148,7 @@ func (m SettingEditorModel) updateListEditor(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+
 	return m, cmd
 }
 
@@ -219,6 +231,7 @@ func (m ScopeSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.list.SetWidth(msg.Width)
 		m.list.SetHeight(msg.Height - 2)
+
 		return m, nil
 
 	case tea.KeyMsg:
@@ -231,6 +244,7 @@ func (m ScopeSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if item, ok := m.list.SelectedItem().(MenuItem); ok {
 				m.scope = item.Action()
 				m.quitting = true
+
 				return m, tea.Quit
 			}
 		}
@@ -238,6 +252,7 @@ func (m ScopeSelectorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
+
 	return m, cmd
 }
 
@@ -246,6 +261,7 @@ func (m ScopeSelectorModel) View() string {
 	if m.quitting {
 		return ""
 	}
+
 	return "\n" + m.list.View()
 }
 

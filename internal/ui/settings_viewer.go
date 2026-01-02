@@ -8,6 +8,11 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	scopeLocal  = "local"
+	scopeGlobal = "global"
+)
+
 // SettingsViewerModel displays all current settings
 type SettingsViewerModel struct {
 	content  string
@@ -21,97 +26,113 @@ type ConfigValue struct {
 	Scope string // "local", "global", or empty if not set
 }
 
+// settingCategories defines the grouping and order of settings
+var settingCategories = map[string][]string{
+	"Issue Provider": {
+		"auto-worktree.issue-provider",
+	},
+	"AI Tool": {
+		"auto-worktree.ai-tool",
+	},
+	"Auto-select": {
+		"auto-worktree.issue-autoselect",
+		"auto-worktree.pr-autoselect",
+	},
+	"Hooks": {
+		"auto-worktree.run-hooks",
+		"auto-worktree.fail-on-hook-error",
+		"auto-worktree.custom-hooks",
+	},
+	"Issue Templates": {
+		"auto-worktree.issue-templates-dir",
+		"auto-worktree.issue-templates-disabled",
+		"auto-worktree.issue-templates-no-prompt",
+		"auto-worktree.issue-templates-detected",
+	},
+	"Provider Configuration": {
+		"auto-worktree.jira-server",
+		"auto-worktree.jira-project",
+		"auto-worktree.gitlab-server",
+		"auto-worktree.gitlab-project",
+		"auto-worktree.linear-team",
+	},
+}
+
+var categoryOrder = []string{
+	"Issue Provider",
+	"AI Tool",
+	"Auto-select",
+	"Hooks",
+	"Issue Templates",
+	"Provider Configuration",
+}
+
+// formatSettingValue formats a config value for display
+func formatSettingValue(val string, scope string, isLocal bool) string {
+	scopeLabel := SubtleStyle.Render(fmt.Sprintf("[%s]", scope))
+	var styledValue string
+
+	switch {
+	case val == "":
+		styledValue = SubtleStyle.Render("(not set)")
+	case isLocal:
+		styledValue = SuccessStyle.Render(val)
+	default:
+		styledValue = InfoStyle.Render(val)
+	}
+
+	return fmt.Sprintf("  %s %s\n", scopeLabel, styledValue)
+}
+
+// renderCategory renders a single category of settings
+func renderCategory(category string, keys []string, localValues, globalValues map[string]string) string {
+	var categoryContent strings.Builder
+
+	categoryContent.WriteString(HeaderStyle.Render(category) + "\n")
+
+	hasValues := false
+
+	for _, key := range keys {
+		localVal, hasLocal := localValues[key]
+		globalVal, hasGlobal := globalValues[key]
+
+		if !hasLocal && !hasGlobal {
+			continue
+		}
+
+		hasValues = true
+		shortKey := strings.TrimPrefix(key, "auto-worktree.")
+		categoryContent.WriteString(fmt.Sprintf("  %s\n", shortKey))
+
+		if hasLocal {
+			categoryContent.WriteString(formatSettingValue(localVal, scopeLocal, true))
+		}
+
+		if hasGlobal && (!hasLocal || globalVal != localVal) {
+			categoryContent.WriteString(formatSettingValue(globalVal, scopeGlobal, false))
+		}
+	}
+
+	if !hasValues {
+		return ""
+	}
+
+	return categoryContent.String() + "\n"
+}
+
 // NewSettingsViewer creates a new settings viewer
 func NewSettingsViewer(localValues, globalValues map[string]string) *SettingsViewerModel {
 	var b strings.Builder
 
 	b.WriteString(TitleStyle.Render("Current Configuration") + "\n\n")
 
-	// Group settings by category
-	categories := map[string][]string{
-		"Issue Provider": {
-			"auto-worktree.issue-provider",
-		},
-		"AI Tool": {
-			"auto-worktree.ai-tool",
-		},
-		"Auto-select": {
-			"auto-worktree.issue-autoselect",
-			"auto-worktree.pr-autoselect",
-		},
-		"Hooks": {
-			"auto-worktree.run-hooks",
-			"auto-worktree.fail-on-hook-error",
-			"auto-worktree.custom-hooks",
-		},
-		"Issue Templates": {
-			"auto-worktree.issue-templates-dir",
-			"auto-worktree.issue-templates-disabled",
-			"auto-worktree.issue-templates-no-prompt",
-			"auto-worktree.issue-templates-detected",
-		},
-		"Provider Configuration": {
-			"auto-worktree.jira-server",
-			"auto-worktree.jira-project",
-			"auto-worktree.gitlab-server",
-			"auto-worktree.gitlab-project",
-			"auto-worktree.linear-team",
-		},
-	}
-
-	categoryOrder := []string{
-		"Issue Provider",
-		"AI Tool",
-		"Auto-select",
-		"Hooks",
-		"Issue Templates",
-		"Provider Configuration",
-	}
-
 	for _, category := range categoryOrder {
-		keys := categories[category]
-		hasValues := false
-
-		var categoryContent strings.Builder
-		categoryContent.WriteString(HeaderStyle.Render(category) + "\n")
-
-		for _, key := range keys {
-			localVal, hasLocal := localValues[key]
-			globalVal, hasGlobal := globalValues[key]
-
-			if !hasLocal && !hasGlobal {
-				continue
-			}
-
-			hasValues = true
-			shortKey := strings.TrimPrefix(key, "auto-worktree.")
-
-			if hasLocal {
-				scope := SubtleStyle.Render("[local]")
-				value := SuccessStyle.Render(localVal)
-				if localVal == "" {
-					value = SubtleStyle.Render("(not set)")
-				}
-				categoryContent.WriteString(fmt.Sprintf("  %s %s %s\n", shortKey, scope, value))
-			}
-
-			if hasGlobal && (!hasLocal || globalVal != localVal) {
-				scope := SubtleStyle.Render("[global]")
-				value := InfoStyle.Render(globalVal)
-				if globalVal == "" {
-					value = SubtleStyle.Render("(not set)")
-				}
-				categoryContent.WriteString(fmt.Sprintf("  %s %s %s\n", shortKey, scope, value))
-			}
-		}
-
-		if hasValues {
-			b.WriteString(categoryContent.String())
-			b.WriteString("\n")
+		keys := settingCategories[category]
+		if content := renderCategory(category, keys, localValues, globalValues); content != "" {
+			b.WriteString(content)
 		}
 	}
 
-	// Add help text at bottom
 	b.WriteString("\n")
 	b.WriteString(HelpStyle.Render("Press q or Esc to return"))
 
@@ -131,9 +152,11 @@ func (m SettingsViewerModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", keyEsc, keyCtrlC, keyEnter:
 			m.quitting = true
+
 			return m, tea.Quit
 		}
 	}
+
 	return m, nil
 }
 

@@ -116,12 +116,15 @@ func runSettingsCommand() error {
 			fmt.Fprintf(os.Stderr, "Usage: auto-worktree settings set <key> <value> [--global]\n")
 			os.Exit(1)
 		}
+
 		key := os.Args[3]
 		value := os.Args[4]
 		scope := "local"
+
 		if len(os.Args) > 5 && os.Args[5] == "--global" {
 			scope = "global"
 		}
+
 		return cmd.RunSettingsSet(key, value, scope)
 
 	case "get":
@@ -130,7 +133,9 @@ func runSettingsCommand() error {
 			fmt.Fprintf(os.Stderr, "Usage: auto-worktree settings get <key>\n")
 			os.Exit(1)
 		}
+
 		key := os.Args[3]
+
 		return cmd.RunSettingsGet(key)
 
 	case "list":
@@ -138,9 +143,11 @@ func runSettingsCommand() error {
 
 	case "reset":
 		scope := "local"
+
 		if len(os.Args) > 3 && os.Args[3] == "--global" {
 			scope = "global"
 		}
+
 		return cmd.RunSettingsReset(scope)
 
 	default:
@@ -151,6 +158,7 @@ func runSettingsCommand() error {
 		fmt.Fprintf(os.Stderr, "  list                           List all configuration values\n")
 		fmt.Fprintf(os.Stderr, "  reset [--global]               Reset all settings to defaults\n")
 		os.Exit(1)
+
 		return nil
 	}
 }
