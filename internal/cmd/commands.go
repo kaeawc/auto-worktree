@@ -10,9 +10,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kaeawc/auto-worktree/internal/ai"
 	"github.com/kaeawc/auto-worktree/internal/environment"
 	"github.com/kaeawc/auto-worktree/internal/git"
 	"github.com/kaeawc/auto-worktree/internal/github"
+	"github.com/kaeawc/auto-worktree/internal/hooks"
+	"github.com/kaeawc/auto-worktree/internal/session"
 	"github.com/kaeawc/auto-worktree/internal/ui"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -437,10 +440,24 @@ func RunIssue(issueID string) error {
 
 	// 10. Display success message
 	fmt.Printf("\n✓ Worktree created at: %s\n", worktreePath)
-	fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
-	fmt.Printf("URL: %s\n", issue.URL)
-	fmt.Printf("\nTo start working:\n")
-	fmt.Printf("  cd %s\n", worktreePath)
+
+	// 11. Run post-worktree hooks
+	if err := runPostWorktreeHooks(worktreePath, repo.RootPath); err != nil {
+		return fmt.Errorf("hook execution failed: %w", err)
+	}
+
+	// 12. Install dependencies
+	setupEnvironment(repo, worktreePath)
+
+	// 13. Start AI tool in background session
+	if err := startAISession(worktreePath, branchName, repo.RootPath, issue); err != nil {
+		// Non-fatal: warn but continue
+		fmt.Printf("⚠ Failed to start AI session: %v\n", err)
+		fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
+		fmt.Printf("URL: %s\n", issue.URL)
+		fmt.Printf("\nTo start working:\n")
+		fmt.Printf("  cd %s\n", worktreePath)
+	}
 
 	return nil
 }
@@ -1496,5 +1513,73 @@ func offerResumeWorktree(wt *git.Worktree, issue *github.Issue) error {
 	fmt.Printf("Branch: %s\n", wt.Branch)
 	fmt.Printf("\nTo resume working:\n")
 	fmt.Printf("  cd %s\n", wt.Path)
+	return nil
+}
+
+// runPostWorktreeHooks executes git hooks after worktree creation
+func runPostWorktreeHooks(worktreePath, rootPath string) error {
+	config := git.NewConfig(rootPath)
+	hookRunner := hooks.NewRunner(worktreePath, config)
+	return hookRunner.Run()
+}
+
+// startAISession starts an AI tool in a background tmux/screen session
+func startAISession(worktreePath, branchName, rootPath string, issue *github.Issue) error {
+	// Initialize session manager
+	sessionMgr := session.NewManager()
+	if !sessionMgr.IsAvailable() {
+		fmt.Println("\n⚠ No terminal multiplexer available (install tmux or screen)")
+		fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
+		fmt.Printf("URL: %s\n", issue.URL)
+		fmt.Printf("\nTo start working:\n")
+		fmt.Printf("  cd %s\n", worktreePath)
+		return nil
+	}
+
+	// Resolve AI tool
+	config := git.NewConfig(rootPath)
+	aiResolver := ai.NewResolver(config)
+	aiTool, err := aiResolver.Resolve()
+	if err != nil {
+		fmt.Printf("\n⚠ %v\n", err)
+		fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
+		fmt.Printf("URL: %s\n", issue.URL)
+		fmt.Printf("\nTo start working:\n")
+		fmt.Printf("  cd %s\n", worktreePath)
+		return nil
+	}
+
+	// Generate session name
+	sessionName := session.GenerateSessionName(branchName)
+
+	// Check if session already exists
+	exists, err := sessionMgr.HasSession(sessionName)
+	if err != nil {
+		return fmt.Errorf("failed to check for existing session: %w", err)
+	}
+
+	if exists {
+		fmt.Printf("\n✓ Session already exists: %s\n", sessionName)
+		fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
+		fmt.Printf("URL: %s\n", issue.URL)
+		fmt.Printf("\nTo attach to the session, run:\n")
+		fmt.Printf("  auto-worktree resume\n")
+		return nil
+	}
+
+	// Create session
+	fmt.Printf("\nStarting %s in background session...\n", aiTool.Name)
+	if err := sessionMgr.CreateSession(sessionName, worktreePath, aiTool.Command); err != nil {
+		return fmt.Errorf("failed to create session: %w", err)
+	}
+
+	fmt.Printf("✓ Session started: %s\n", sessionName)
+	fmt.Printf("\nIssue #%d: %s\n", issue.Number, issue.Title)
+	fmt.Printf("URL: %s\n", issue.URL)
+	fmt.Printf("\nSession is running in the background using %s\n", sessionMgr.SessionType())
+	fmt.Printf("To attach to the session:\n")
+	fmt.Printf("  1. Run: auto-worktree resume\n")
+	fmt.Printf("  2. Or use: %s attach -t %s\n", sessionMgr.SessionType(), sessionName)
+
 	return nil
 }
