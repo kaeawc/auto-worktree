@@ -33,13 +33,11 @@ type Manager struct {
 }
 
 // NewManager creates a new session manager
-// It detects which multiplexer is available (tmux preferred, screen fallback)
+// It requires tmux - screen is no longer supported
 func NewManager() *Manager {
 	sessionType := TypeNone
 	if commandExists("tmux") {
 		sessionType = TypeTmux
-	} else if commandExists("screen") {
-		sessionType = TypeScreen
 	}
 
 	// Initialize metadata store
