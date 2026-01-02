@@ -175,7 +175,38 @@ func NewJIRAStub() *StubProvider {
 		Author:    "bob",
 		CreatedAt: "2025-01-01T10:00:00Z",
 		UpdatedAt: "2025-01-02T12:00:00Z",
+		Assignee:  "alice",
 		IsClosed:  false,
+	})
+
+	stub.AddIssue(&providers.Issue{
+		ID:        "PROJ-790",
+		Key:       "PROJ-790",
+		Title:     "Fix critical bug in authentication",
+		Body:      "Users cannot log in with SSO credentials",
+		URL:       "https://jira.example.com/browse/PROJ-790",
+		State:     "OPEN",
+		Labels:    []string{"bug", "critical"},
+		Author:    "charlie",
+		CreatedAt: "2025-01-02T08:00:00Z",
+		UpdatedAt: "2025-01-02T15:00:00Z",
+		Assignee:  "alice",
+		IsClosed:  false,
+	})
+
+	stub.AddIssue(&providers.Issue{
+		ID:        "PROJ-791",
+		Key:       "PROJ-791",
+		Title:     "Refactor database connection pool",
+		Body:      "Improve connection pool efficiency and resilience",
+		URL:       "https://jira.example.com/browse/PROJ-791",
+		State:     "DONE",
+		Labels:    []string{"performance", "refactor"},
+		Author:    "alice",
+		CreatedAt: "2024-12-15T10:00:00Z",
+		UpdatedAt: "2025-01-02T14:00:00Z",
+		Assignee:  "bob",
+		IsClosed:  true,
 	})
 
 	return stub

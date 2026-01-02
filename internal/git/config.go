@@ -354,6 +354,26 @@ func (c *Config) GetPackageManager() string {
 	return c.GetWithDefault(ConfigPackageManager, "", ConfigScopeAuto)
 }
 
+// GetJiraServer returns the configured JIRA server URL
+func (c *Config) GetJiraServer() string {
+	return c.GetWithDefault(ConfigJiraServer, "", ConfigScopeAuto)
+}
+
+// SetJiraServer sets the JIRA server URL
+func (c *Config) SetJiraServer(server string, scope ConfigScope) error {
+	return c.Set(ConfigJiraServer, server, scope)
+}
+
+// GetJiraProject returns the configured JIRA project key
+func (c *Config) GetJiraProject() string {
+	return c.GetWithDefault(ConfigJiraProject, "", ConfigScopeAuto)
+}
+
+// SetJiraProject sets the JIRA project key
+func (c *Config) SetJiraProject(project string, scope ConfigScope) error {
+	return c.Set(ConfigJiraProject, project, scope)
+}
+
 // UnsetAll removes all auto-worktree configuration
 func (c *Config) UnsetAll(scope ConfigScope) error {
 	keys := []string{
