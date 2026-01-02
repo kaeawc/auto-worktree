@@ -304,6 +304,22 @@ func RunCleanup() error {
 	}
 
 	// Separate merged and stale
+	merged, stale := categorizeWorktrees(candidates)
+
+	// Process merged worktrees (automatic with confirmation)
+	if err := processMergedWorktrees(repo, merged, stale); err != nil {
+		return err
+	}
+
+	// Process stale worktrees (interactive)
+	processStaleWorktrees(repo, stale)
+
+	fmt.Println("\nCleanup complete!")
+	return nil
+}
+
+// categorizeWorktrees separates worktrees into merged and stale categories
+func categorizeWorktrees(candidates []*git.Worktree) ([]*git.Worktree, []*git.Worktree) {
 	var merged, stale []*git.Worktree
 	for _, wt := range candidates {
 		if wt.IsMerged() {
@@ -312,56 +328,69 @@ func RunCleanup() error {
 			stale = append(stale, wt)
 		}
 	}
+	return merged, stale
+}
 
-	// Show initial confirmation for automatic cleanup of merged worktrees
-	if len(merged) > 0 {
-		confirmation := ui.NewCleanupConfirmation(len(merged), len(stale))
-		p := tea.NewProgram(confirmation)
-
-		m, err := p.Run()
-		if err != nil {
-			return fmt.Errorf("error showing confirmation: %w", err)
-		}
-
-		finalModel, ok := m.(ui.CleanupConfirmationModel)
-		if !ok {
-			return fmt.Errorf("unexpected model type")
-		}
-
-		if finalModel.WasCanceled() {
-			fmt.Println("Cleanup canceled")
-			return nil
-		}
-
-		if !finalModel.WasConfirmed() {
-			fmt.Println("Cleanup not confirmed")
-			return nil
-		}
-
-		// Automatically clean up merged worktrees
-		fmt.Printf("\nCleaning up %d merged worktree(s)...\n\n", len(merged))
-		for _, wt := range merged {
-			if err := cleanupWorktree(repo, wt, true); err != nil {
-				fmt.Printf("  Error cleaning up %s: %v\n", wt.Path, err)
-				continue
-			}
-			fmt.Printf("  ✓ Removed %s (%s)\n", wt.Path, wt.CleanupReason())
-		}
+// processMergedWorktrees handles automatic cleanup of merged worktrees with confirmation
+func processMergedWorktrees(repo *git.Repository, merged, stale []*git.Worktree) error {
+	if len(merged) == 0 {
+		return nil
 	}
 
-	// Interactive cleanup for stale worktrees
-	if len(stale) > 0 {
-		fmt.Printf("\nInteractive cleanup for %d stale worktree(s)...\n\n", len(stale))
-		for _, wt := range stale {
-			if err := interactiveCleanup(repo, wt); err != nil {
-				fmt.Printf("  Error: %v\n", err)
-				continue
-			}
-		}
+	// Show confirmation prompt
+	if !confirmCleanup(len(merged), len(stale)) {
+		return nil
 	}
 
-	fmt.Println("\nCleanup complete!")
+	// Clean up merged worktrees
+	fmt.Printf("\nCleaning up %d merged worktree(s)...\n\n", len(merged))
+	for _, wt := range merged {
+		if err := cleanupWorktree(repo, wt, true); err != nil {
+			fmt.Printf("  Error cleaning up %s: %v\n", wt.Path, err)
+			continue
+		}
+		fmt.Printf("  ✓ Removed %s (%s)\n", wt.Path, wt.CleanupReason())
+	}
+
 	return nil
+}
+
+// confirmCleanup shows confirmation dialog and returns user's choice
+func confirmCleanup(mergedCount, staleCount int) bool {
+	confirmation := ui.NewCleanupConfirmation(mergedCount, staleCount)
+	p := tea.NewProgram(confirmation)
+
+	m, err := p.Run()
+	if err != nil {
+		fmt.Printf("Error showing confirmation: %v\n", err)
+		return false
+	}
+
+	finalModel, ok := m.(ui.CleanupConfirmationModel)
+	if !ok {
+		return false
+	}
+
+	if finalModel.WasCanceled() {
+		fmt.Println("Cleanup canceled")
+		return false
+	}
+
+	return finalModel.WasConfirmed()
+}
+
+// processStaleWorktrees handles interactive cleanup of stale worktrees
+func processStaleWorktrees(repo *git.Repository, stale []*git.Worktree) {
+	if len(stale) == 0 {
+		return
+	}
+
+	fmt.Printf("\nInteractive cleanup for %d stale worktree(s)...\n\n", len(stale))
+	for _, wt := range stale {
+		if err := interactiveCleanup(repo, wt); err != nil {
+			fmt.Printf("  Error: %v\n", err)
+		}
+	}
 }
 
 // interactiveCleanup prompts the user to clean up a worktree

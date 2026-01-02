@@ -5,6 +5,23 @@ import (
 	"fmt"
 )
 
+// Provider type constants
+const (
+	ProviderTypeGitHubIssue = "github-issue"
+	ProviderTypeGitHubPR    = "github-pr"
+	ProviderTypeGitLabMR    = "gitlab-mr"
+	ProviderTypeJira        = "jira"
+	ProviderTypeLinear      = "linear"
+)
+
+// Branch prefixes
+const (
+	BranchPrefixWork  = "work/"
+	BranchPrefixPR    = "pr/"
+	BranchPrefixMR    = "mr/"
+	BranchPrefixIssue = "issue/"
+)
+
 // Provider represents an external issue tracking system
 type Provider interface {
 	// GetIssueStatus checks if an issue is closed/completed
@@ -44,105 +61,77 @@ var ErrNotFound = errors.New("issue or PR not found")
 //   - issue/PROJ-123-description (JIRA)
 //   - mr/789-description (GitLab MR)
 func ParseBranchName(branchName string) (providerType, id string, found bool) {
-	// We'll implement more sophisticated parsing later
-	// For now, return basic patterns
-
-	// GitHub issue: work/123-*
-	if len(branchName) > 5 && branchName[:5] == "work/" {
-		// Extract number after work/
-		var num string
-		for i := 5; i < len(branchName) && branchName[i] >= '0' && branchName[i] <= '9'; i++ {
-			num += string(branchName[i])
-		}
-		if num != "" {
-			return "github-issue", num, true
-		}
+	// Try simple numeric patterns first (GitHub/GitLab)
+	if id, found := extractNumericID(branchName, BranchPrefixWork, 5); found {
+		return ProviderTypeGitHubIssue, id, true
+	}
+	if id, found := extractNumericID(branchName, BranchPrefixPR, 3); found {
+		return ProviderTypeGitHubPR, id, true
+	}
+	if id, found := extractNumericID(branchName, BranchPrefixMR, 3); found {
+		return ProviderTypeGitLabMR, id, true
 	}
 
-	// GitHub PR: pr/456-*
-	if len(branchName) > 3 && branchName[:3] == "pr/" {
-		var num string
-		for i := 3; i < len(branchName) && branchName[i] >= '0' && branchName[i] <= '9'; i++ {
-			num += string(branchName[i])
-		}
-		if num != "" {
-			return "github-pr", num, true
-		}
+	// Try JIRA/Linear patterns (PROJ-123 format)
+	if id, found := extractProjectID(branchName, BranchPrefixIssue, 6); found {
+		return ProviderTypeJira, id, true
 	}
-
-	// GitLab MR: mr/789-*
-	if len(branchName) > 3 && branchName[:3] == "mr/" {
-		var num string
-		for i := 3; i < len(branchName) && branchName[i] >= '0' && branchName[i] <= '9'; i++ {
-			num += string(branchName[i])
-		}
-		if num != "" {
-			return "gitlab-mr", num, true
-		}
-	}
-
-	// JIRA: issue/PROJ-123-* or work/PROJ-123-*
-	if len(branchName) > 6 && (branchName[:6] == "issue/" || branchName[:5] == "work/") {
-		start := 6
-		if branchName[:5] == "work/" {
-			start = 5
-		}
-
-		// Look for PROJ-123 pattern
-		var jiraID string
-		inNumber := false
-		for i := start; i < len(branchName); i++ {
-			ch := branchName[i]
-			if ch >= 'A' && ch <= 'Z' {
-				jiraID += string(ch)
-			} else if ch == '-' {
-				if len(jiraID) > 0 {
-					jiraID += string(ch)
-					inNumber = true
-				} else {
-					break
-				}
-			} else if ch >= '0' && ch <= '9' && inNumber {
-				jiraID += string(ch)
-			} else {
-				break
-			}
-		}
-
-		if len(jiraID) > 0 && inNumber {
-			return "jira", jiraID, true
-		}
-	}
-
-	// Linear: work/TEAM-123-* pattern
-	// Linear IDs are typically like "ENG-123"
-	if len(branchName) > 5 && branchName[:5] == "work/" {
-		var linearID string
-		inNumber := false
-		for i := 5; i < len(branchName); i++ {
-			ch := branchName[i]
-			if ch >= 'A' && ch <= 'Z' {
-				linearID += string(ch)
-			} else if ch == '-' {
-				if len(linearID) > 0 {
-					linearID += string(ch)
-					inNumber = true
-				} else {
-					break
-				}
-			} else if ch >= '0' && ch <= '9' && inNumber {
-				linearID += string(ch)
-			} else {
-				break
-			}
-		}
-
-		if len(linearID) > 0 && inNumber {
-			return "linear", linearID, true
-		}
+	if id, found := extractProjectID(branchName, BranchPrefixWork, 5); found {
+		// Could be JIRA or Linear - for now assume JIRA if uppercase
+		return ProviderTypeJira, id, true
 	}
 
 	return "", "", false
+}
+
+// extractNumericID extracts a numeric ID after a prefix
+func extractNumericID(branchName, prefix string, prefixLen int) (string, bool) {
+	if len(branchName) <= prefixLen || branchName[:prefixLen] != prefix {
+		return "", false
+	}
+
+	var num string
+	for i := prefixLen; i < len(branchName) && branchName[i] >= '0' && branchName[i] <= '9'; i++ {
+		num += string(branchName[i])
+	}
+
+	return num, num != ""
+}
+
+// extractProjectID extracts a project-based ID (e.g., PROJ-123) after a prefix
+func extractProjectID(branchName, prefix string, prefixLen int) (string, bool) {
+	if len(branchName) <= prefixLen {
+		return "", false
+	}
+
+	// Handle variable length prefixes
+	actualPrefixLen := len(prefix)
+	if len(branchName) <= actualPrefixLen || branchName[:actualPrefixLen] != prefix {
+		return "", false
+	}
+
+	var projectID string
+	inNumber := false
+
+	for i := actualPrefixLen; i < len(branchName); i++ {
+		ch := branchName[i]
+		if ch >= 'A' && ch <= 'Z' {
+			projectID += string(ch)
+		} else if ch == '-' {
+			if len(projectID) > 0 {
+				projectID += string(ch)
+				inNumber = true
+			} else {
+				break
+			}
+		} else if ch >= '0' && ch <= '9' && inNumber {
+			projectID += string(ch)
+		} else {
+			break
+		}
+	}
+
+	return projectID, len(projectID) > 0 && inNumber
 }
 
 // DetectProvider determines which provider to use based on configuration and branch name
@@ -153,9 +142,9 @@ func DetectProvider(branchName, configuredProvider string) Provider {
 		return &GitHubProvider{}
 	case "gitlab":
 		return &GitLabProvider{}
-	case "jira":
+	case ProviderTypeJira:
 		return &JiraProvider{}
-	case "linear":
+	case ProviderTypeLinear:
 		return &LinearProvider{}
 	}
 
@@ -166,13 +155,13 @@ func DetectProvider(branchName, configuredProvider string) Provider {
 	}
 
 	switch providerType {
-	case "github-issue", "github-pr":
+	case ProviderTypeGitHubIssue, ProviderTypeGitHubPR:
 		return &GitHubProvider{}
-	case "gitlab-mr":
+	case ProviderTypeGitLabMR:
 		return &GitLabProvider{}
-	case "jira":
+	case ProviderTypeJira:
 		return &JiraProvider{}
-	case "linear":
+	case ProviderTypeLinear:
 		return &LinearProvider{}
 	}
 

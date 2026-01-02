@@ -7,6 +7,12 @@ import (
 	"strings"
 )
 
+const (
+	linearStatusCompleted = "completed"
+	linearStatusDone      = "done"
+	linearStatusCanceled  = "canceled"
+)
+
 // LinearProvider implements Provider for Linear
 type LinearProvider struct{}
 
@@ -60,18 +66,18 @@ func (l *LinearProvider) GetIssueStatus(issueID string) (bool, bool, error) {
 	stateName := strings.ToLower(result.State.Name)
 	stateType := strings.ToLower(result.State.Type)
 
-	isClosed := stateType == "completed" ||
-		stateType == "canceled" ||
-		stateName == "done" ||
-		stateName == "completed" ||
-		stateName == "canceled" ||
+	isClosed := stateType == linearStatusCompleted ||
+		stateType == linearStatusCanceled ||
+		stateName == linearStatusDone ||
+		stateName == linearStatusCompleted ||
+		stateName == linearStatusCanceled ||
 		result.CompletedAt != "" ||
 		result.CanceledAt != ""
 
 	// Issue is completed if it's marked as completed (not just canceled)
-	isCompleted := stateType == "completed" ||
-		stateName == "done" ||
-		stateName == "completed" ||
+	isCompleted := stateType == linearStatusCompleted ||
+		stateName == linearStatusDone ||
+		stateName == linearStatusCompleted ||
 		result.CompletedAt != ""
 
 	return isClosed, isCompleted, nil

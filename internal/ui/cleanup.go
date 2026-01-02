@@ -7,6 +7,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+const (
+	promptStateBranch = "branch"
+	promptStateDone   = "done"
+	keyCtrlC          = "ctrl+c"
+)
+
 var (
 	cleanupTitleStyle    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("170"))
 	cleanupWarningStyle  = lipgloss.NewStyle().Foreground(lipgloss.Color("214"))
@@ -55,41 +61,41 @@ func (m CleanupPromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// User confirmed cleanup
 				if m.Branch != "" {
 					// Move to branch deletion prompt
-					m.PromptState = "branch"
+					m.PromptState = promptStateBranch
 					return m, nil
 				}
 				// No branch, just confirm cleanup
 				m.Confirmed = true
-				m.PromptState = "done"
+				m.PromptState = promptStateDone
 				return m, tea.Quit
 
-			case "n", "N", "q", "ctrl+c", "esc":
+			case "n", "N", "q", keyCtrlC, "esc":
 				// User canceled
 				m.Canceled = true
-				m.PromptState = "done"
+				m.PromptState = promptStateDone
 				return m, tea.Quit
 			}
 
-		case "branch":
+		case promptStateBranch:
 			switch msg.String() {
 			case "y", "Y":
 				// User confirmed branch deletion
 				m.DeleteBranch = true
 				m.Confirmed = true
-				m.PromptState = "done"
+				m.PromptState = promptStateDone
 				return m, tea.Quit
 
 			case "n", "N":
 				// User declined branch deletion
 				m.DeleteBranch = false
 				m.Confirmed = true
-				m.PromptState = "done"
+				m.PromptState = promptStateDone
 				return m, tea.Quit
 
-			case "q", "ctrl+c", "esc":
+			case "q", keyCtrlC, "esc":
 				// User canceled
 				m.Canceled = true
-				m.PromptState = "done"
+				m.PromptState = promptStateDone
 				return m, tea.Quit
 			}
 		}
@@ -100,7 +106,7 @@ func (m CleanupPromptModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the cleanup prompt
 func (m CleanupPromptModel) View() string {
-	if m.PromptState == "done" {
+	if m.PromptState == promptStateDone {
 		return ""
 	}
 
@@ -128,7 +134,7 @@ func (m CleanupPromptModel) View() string {
 		s += cleanupQuestionStyle.Render("Remove this worktree?") + " "
 		s += cleanupHintStyle.Render("[y/n]") + " "
 
-	case "branch":
+	case promptStateBranch:
 		s += cleanupQuestionStyle.Render(fmt.Sprintf("Delete branch '%s'?", m.Branch)) + " "
 		s += cleanupHintStyle.Render("[y/n]") + " "
 	}
@@ -181,7 +187,7 @@ func (m CleanupConfirmationModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Confirmed = true
 			return m, tea.Quit
 
-		case "n", "N", "q", "ctrl+c", "esc":
+		case "n", "N", "q", keyCtrlC, "esc":
 			m.Canceled = true
 			return m, tea.Quit
 		}

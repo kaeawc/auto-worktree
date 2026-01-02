@@ -7,6 +7,13 @@ import (
 	"strings"
 )
 
+const (
+	jiraStatusDone     = "done"
+	jiraStatusResolved = "resolved"
+	jiraStatusClosed   = "closed"
+	jiraStatusFixed    = "fixed"
+)
+
 // JiraProvider implements Provider for JIRA
 type JiraProvider struct{}
 
@@ -62,17 +69,17 @@ func (j *JiraProvider) GetIssueStatus(issueID string) (bool, bool, error) {
 	resolutionName := strings.ToLower(result.Fields.Resolution.Name)
 
 	// Issue is closed if status is Done, Resolved, Closed, etc.
-	isClosed := statusName == "done" ||
-		statusName == "resolved" ||
-		statusName == "closed" ||
-		resolutionName == "done" ||
-		resolutionName == "resolved" ||
-		resolutionName == "fixed"
+	isClosed := statusName == jiraStatusDone ||
+		statusName == jiraStatusResolved ||
+		statusName == jiraStatusClosed ||
+		resolutionName == jiraStatusDone ||
+		resolutionName == jiraStatusResolved ||
+		resolutionName == jiraStatusFixed
 
 	// Issue is completed if it's closed with a positive resolution
-	isCompleted := isClosed && (resolutionName == "done" ||
-		resolutionName == "resolved" ||
-		resolutionName == "fixed")
+	isCompleted := isClosed && (resolutionName == jiraStatusDone ||
+		resolutionName == jiraStatusResolved ||
+		resolutionName == jiraStatusFixed)
 
 	return isClosed, isCompleted, nil
 }
