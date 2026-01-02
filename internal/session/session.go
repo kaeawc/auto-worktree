@@ -100,12 +100,27 @@ func (m *Manager) createTmuxSession(name, workingDir string, command []string) e
 		"-d",       // Detached
 		"-s", name, // Session name
 		"-c", workingDir, // Working directory
+		"-x", "200", // Terminal width
+		"-y", "50",  // Terminal height
 	}
 	args = append(args, command...)
 
 	cmd := exec.CommandContext(context.Background(), "tmux", args...)
+	// Set TERM to enable proper color support inside the session
+	cmd.Env = append(os.Environ(), "TERM=tmux-256color")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to create tmux session: %w", err)
+	}
+
+	// Configure the session's default terminal type and color support
+	configArgs := []string{
+		"set-option", "-t", name,
+		"default-terminal", "tmux-256color",
+	}
+	configCmd := exec.CommandContext(context.Background(), "tmux", configArgs...)
+	if err := configCmd.Run(); err != nil {
+		// Non-fatal: configuration failed but session is created
+		// Continue without error
 	}
 
 	return nil
