@@ -50,16 +50,21 @@ func newGitHubProvider(repo *git.Repository) (providers.Provider, error) {
 
 	client, err := github.NewClient(repo.RootPath)
 	if err != nil {
-		if errors.Is(err, github.ErrGHNotInstalled) {
-			return nil, errors.New("gh CLI is not installed. Install with: brew install gh")
-		}
-		if errors.Is(err, github.ErrGHNotAuthenticated) {
-			return nil, errors.New("gh CLI is not authenticated. Run: gh auth login")
-		}
-		return nil, fmt.Errorf("failed to initialize GitHub client: %w", err)
+		return nil, handleGitHubClientError(err)
 	}
 
 	return newGitHubProviderFromClient(client), nil
+}
+
+// handleGitHubClientError converts GitHub client errors to user-friendly messages
+func handleGitHubClientError(err error) error {
+	if errors.Is(err, github.ErrGHNotInstalled) {
+		return errors.New("gh CLI is not installed. Install with: brew install gh")
+	}
+	if errors.Is(err, github.ErrGHNotAuthenticated) {
+		return errors.New("gh CLI is not authenticated. Run: gh auth login")
+	}
+	return fmt.Errorf("failed to initialize GitHub client: %w", err)
 }
 
 // newGitHubProviderFromClient creates a provider wrapper around GitHub client
@@ -192,16 +197,21 @@ func newGitLabProvider(repo *git.Repository) (providers.Provider, error) {
 
 	client, err := gitlab.NewClient(repo.RootPath)
 	if err != nil {
-		if errors.Is(err, gitlab.ErrGlabNotInstalled) {
-			return nil, errors.New("glab CLI is not installed. Install with: brew install glab")
-		}
-		if errors.Is(err, gitlab.ErrGlabNotAuthenticated) {
-			return nil, errors.New("glab CLI is not authenticated. Run: glab auth login")
-		}
-		return nil, fmt.Errorf("failed to initialize GitLab client: %w", err)
+		return nil, handleGitLabClientError(err)
 	}
 
 	return newGitLabProviderFromClient(client), nil
+}
+
+// handleGitLabClientError converts GitLab client errors to user-friendly messages
+func handleGitLabClientError(err error) error {
+	if errors.Is(err, gitlab.ErrGlabNotInstalled) {
+		return errors.New("glab CLI is not installed. Install with: brew install glab")
+	}
+	if errors.Is(err, gitlab.ErrGlabNotAuthenticated) {
+		return errors.New("glab CLI is not authenticated. Run: glab auth login")
+	}
+	return fmt.Errorf("failed to initialize GitLab client: %w", err)
 }
 
 // newGitLabProviderFromClient creates a provider wrapper around GitLab client
