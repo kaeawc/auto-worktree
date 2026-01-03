@@ -17,15 +17,17 @@ const (
 
 // FilterableListItem represents an item in the filterable list
 type FilterableListItem struct {
-	number      int
+	id          string // String ID for Linear (e.g., "ENG-123") or stringified number for GitHub
+	number      int    // Numeric ID for GitHub (legacy, use id for display)
 	title       string
 	labels      []string
 	hasWorktree bool // Mark if worktree exists
 }
 
-// NewFilterableListItem creates a new filterable list item
+// NewFilterableListItem creates a new filterable list item (GitHub-style with number)
 func NewFilterableListItem(number int, title string, labels []string, hasWorktree bool) FilterableListItem {
 	return FilterableListItem{
+		id:          fmt.Sprintf("%d", number),
 		number:      number,
 		title:       title,
 		labels:      labels,
@@ -33,7 +35,23 @@ func NewFilterableListItem(number int, title string, labels []string, hasWorktre
 	}
 }
 
-// Number returns the issue number
+// NewFilterableListItemWithID creates a new filterable list item (Linear-style with string ID)
+func NewFilterableListItemWithID(id string, title string, labels []string, hasWorktree bool) FilterableListItem {
+	return FilterableListItem{
+		id:          id,
+		number:      0, // Not used for Linear
+		title:       title,
+		labels:      labels,
+		hasWorktree: hasWorktree,
+	}
+}
+
+// ID returns the string identifier
+func (i FilterableListItem) ID() string {
+	return i.id
+}
+
+// Number returns the issue number (for GitHub compatibility)
 func (i FilterableListItem) Number() int {
 	return i.number
 }
@@ -44,7 +62,7 @@ func (i FilterableListItem) Title() string {
 	if i.hasWorktree {
 		prefix = "● "
 	}
-	return fmt.Sprintf("%s#%d | %s", prefix, i.number, i.title)
+	return fmt.Sprintf("%s%s | %s", prefix, i.id, i.title)
 }
 
 // Description returns the description for the list item display.
@@ -61,8 +79,8 @@ func (i FilterableListItem) Description() string {
 
 // FilterValue returns the value used for filtering the list item.
 func (i FilterableListItem) FilterValue() string {
-	// Allow filtering by number or title
-	return fmt.Sprintf("%d %s", i.number, i.title)
+	// Allow filtering by ID or title
+	return fmt.Sprintf("%s %s", i.id, i.title)
 }
 
 // FilterListModel represents a filterable list UI component

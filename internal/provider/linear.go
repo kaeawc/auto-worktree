@@ -96,18 +96,19 @@ func (l *LinearProvider) GetPRStatus(_ string) (bool, error) {
 
 // GetStatusForBranch attempts to determine the status based on branch name
 func (l *LinearProvider) GetStatusForBranch(branchName string) (*IssueStatus, error) {
-	providerType, id, found := ParseBranchName(branchName)
+	// Pass "linear" as configured provider to disambiguate from JIRA
+	providerType, id, found := ParseBranchNameWithProvider(branchName, ProviderTypeLinear)
 	if !found {
 		return nil, fmt.Errorf("could not parse branch name: %s", branchName)
 	}
 
-	if providerType != "linear" {
+	if providerType != ProviderTypeLinear {
 		return nil, fmt.Errorf("unsupported branch type: %s", providerType)
 	}
 
 	status := &IssueStatus{
 		ID:       id,
-		Provider: "linear",
+		Provider: ProviderTypeLinear,
 	}
 
 	isClosed, isCompleted, err := l.GetIssueStatus(id)

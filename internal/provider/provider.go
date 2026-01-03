@@ -60,8 +60,21 @@ var ErrNotFound = errors.New("issue or PR not found")
 //   - pr/456-description (GitHub PR)
 //   - issue/PROJ-123-description (JIRA)
 //   - mr/789-description (GitLab MR)
+//   - work/TEAM-123-description (Linear or JIRA, depends on config)
 func ParseBranchName(branchName string) (providerType, id string, found bool) {
-	// Try simple numeric patterns first (GitHub/GitLab)
+	return ParseBranchNameWithProvider(branchName, "")
+}
+
+// ParseBranchNameWithProvider attempts to extract issue/PR information from a branch name
+// Uses configured provider to disambiguate JIRA vs Linear for work/TEAM-123 branches
+// Supported formats:
+//   - work/123-description (GitHub issue)
+//   - pr/456-description (GitHub PR)
+//   - issue/PROJ-123-description (JIRA)
+//   - mr/789-description (GitLab MR)
+//   - work/TEAM-123-description (Linear if configuredProvider="linear", else JIRA)
+func ParseBranchNameWithProvider(branchName, configuredProvider string) (providerType, id string, found bool) {
+	// Try simple numeric patterns first (GitHub/GitLab) - unambiguous
 	if id, found := extractNumericID(branchName, BranchPrefixWork, 5); found {
 		return ProviderTypeGitHubIssue, id, true
 	}
@@ -74,13 +87,20 @@ func ParseBranchName(branchName string) (providerType, id string, found bool) {
 		return ProviderTypeGitLabMR, id, true
 	}
 
-	// Try JIRA/Linear patterns (PROJ-123 format)
+	// Try JIRA/Linear patterns (PROJ-123 format) - AMBIGUOUS
+	// issue/PROJ-123 always JIRA (issue/ prefix is JIRA-specific)
 	if id, found := extractProjectID(branchName, BranchPrefixIssue, 6); found {
 		return ProviderTypeJira, id, true
 	}
 
+	// work/PROJ-123 could be JIRA or Linear - use configured provider
 	if id, found := extractProjectID(branchName, BranchPrefixWork, 5); found {
-		// Could be JIRA or Linear - for now assume JIRA if uppercase
+		// Use configured provider to disambiguate
+		if configuredProvider == ProviderTypeLinear {
+			return ProviderTypeLinear, id, true
+		}
+		// Default to JIRA for backward compatibility
+		// This includes: configuredProvider == "jira" or empty
 		return ProviderTypeJira, id, true
 	}
 
