@@ -380,7 +380,7 @@ func TestPreBuiltStubs(t *testing.T) {
 			stubFactory:    NewJIRAStub,
 			expectedName:   "JIRA",
 			expectedType:   "jira",
-			expectedIssues: 1,
+			expectedIssues: 3,
 		},
 		{
 			name:           "Linear stub",
