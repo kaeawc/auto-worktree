@@ -56,21 +56,27 @@ func (p *Provider) ListIssues(ctx context.Context, limit int) ([]providers.Issue
 	}
 
 	// Convert to providers.Issue format
-	var issues []providers.Issue
-	for _, jiraIssue := range jiraIssues {
+	capacity := len(jiraIssues)
+	if limit > 0 && limit < capacity {
+		capacity = limit
+	}
+
+	issues := make([]providers.Issue, 0, capacity)
+
+	for i := range jiraIssues {
 		issue := providers.Issue{
-			ID:        jiraIssue.Key,
-			Key:       jiraIssue.Key,
-			Title:     jiraIssue.Fields.Summary,
-			Body:      jiraIssue.Fields.Description,
-			URL:       jiraIssue.Fields.URL,
-			State:     jiraIssue.Fields.Status.Name,
-			Labels:    jiraIssue.Fields.Labels,
-			Author:    jiraIssue.Fields.Creator.DisplayName,
-			CreatedAt: jiraIssue.Fields.Created,
-			UpdatedAt: jiraIssue.Fields.Updated,
-			Assignee:  jiraIssue.Fields.Assignee.DisplayName,
-			IsClosed:  jiraIssue.IsClosed(),
+			ID:        jiraIssues[i].Key,
+			Key:       jiraIssues[i].Key,
+			Title:     jiraIssues[i].Fields.Summary,
+			Body:      jiraIssues[i].Fields.Description,
+			URL:       jiraIssues[i].Fields.URL,
+			State:     jiraIssues[i].Fields.Status.Name,
+			Labels:    jiraIssues[i].Fields.Labels,
+			Author:    jiraIssues[i].Fields.Creator.DisplayName,
+			CreatedAt: jiraIssues[i].Fields.Created,
+			UpdatedAt: jiraIssues[i].Fields.Updated,
+			Assignee:  jiraIssues[i].Fields.Assignee.DisplayName,
+			IsClosed:  jiraIssues[i].IsClosed(),
 		}
 		issues = append(issues, issue)
 
@@ -109,6 +115,7 @@ func (p *Provider) GetIssue(ctx context.Context, id string) (*providers.Issue, e
 // IsIssueClosed returns true if a JIRA issue is closed/resolved
 func (p *Provider) IsIssueClosed(ctx context.Context, id string) (bool, error) {
 	isClosed, err := p.client.GetIssueStatus(ctx, id)
+
 	return isClosed, err
 }
 

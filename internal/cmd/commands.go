@@ -711,6 +711,8 @@ func selectIssueInteractiveGeneric(ctx context.Context, provider providers.Provi
 }
 
 // startAISessionGeneric starts AI session for any provider
+//
+//nolint:unparam
 func startAISessionGeneric(_ string, _ string, rootPath string, issue *providers.Issue) error {
 	// This is a simplified version - full implementation would handle provider-specific context
 	cfg := git.NewConfig(rootPath)

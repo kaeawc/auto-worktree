@@ -24,12 +24,16 @@ func NewCLIExecutor() *CLIExecutor {
 func (e *CLIExecutor) Execute(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "jira", args...)
 	output, err := cmd.Output()
+
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderr := string(exitErr.Stderr)
+
 			return "", fmt.Errorf("jira command failed: %s", stderr)
 		}
+
 		return "", fmt.Errorf("jira command failed: %w", err)
 	}
+
 	return strings.TrimSpace(string(output)), nil
 }

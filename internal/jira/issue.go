@@ -82,6 +82,7 @@ func (i *Issue) FormatForDisplay() string {
 		for idx, label := range i.Fields.Labels {
 			labelNames[idx] = fmt.Sprintf("[%s]", label)
 		}
+
 		parts = append(parts, "|", strings.Join(labelNames, " "))
 	}
 
@@ -110,6 +111,7 @@ func isResolvedStatus(status string) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -121,5 +123,6 @@ func isResolvedResolution(resolution string) bool {
 			return true
 		}
 	}
+
 	return false
 }

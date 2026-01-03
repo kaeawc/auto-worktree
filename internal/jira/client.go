@@ -49,8 +49,10 @@ func NewClientWithExecutor(server, project string, executor Executor) (*Client, 
 func IsInstalled() bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	cmd := exec.CommandContext(ctx, "jira", "version")
 	err := cmd.Run()
+
 	return err == nil
 }
 
@@ -58,11 +60,14 @@ func IsInstalled() bool {
 func IsConfigured() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+
 	cmd := exec.CommandContext(ctx, "jira", "config")
 	err := cmd.Run()
+
 	if err != nil {
 		return ErrJiraNotConfigured
 	}
+
 	return nil
 }
 
@@ -82,11 +87,13 @@ func (c *Client) ListOpenIssues(ctx context.Context) ([]Issue, error) {
 	// Use jira issue list with JQL filter and JSON output
 	args := []string{"issue", "list", "--jql", jql, "--json"}
 	output, err := c.exec(ctx, args...)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to list issues: %w", err)
 	}
 
 	var issues []Issue
+
 	if err := json.Unmarshal([]byte(output), &issues); err != nil {
 		return nil, fmt.Errorf("failed to parse issues: %w", err)
 	}
@@ -99,11 +106,13 @@ func (c *Client) GetIssue(ctx context.Context, key string) (*Issue, error) {
 	// Use jira issue view with JSON output
 	args := []string{"issue", "view", key, "--json"}
 	output, err := c.exec(ctx, args...)
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to get issue %s: %w", key, err)
 	}
 
 	var issue Issue
+
 	if err := json.Unmarshal([]byte(output), &issue); err != nil {
 		return nil, fmt.Errorf("failed to parse issue: %w", err)
 	}
@@ -151,6 +160,7 @@ func (c *Client) CreateIssue(ctx context.Context, title, body string) (*Issue, e
 	}
 
 	var issue Issue
+
 	if err := json.Unmarshal([]byte(output), &issue); err != nil {
 		return nil, fmt.Errorf("failed to parse created issue: %w", err)
 	}

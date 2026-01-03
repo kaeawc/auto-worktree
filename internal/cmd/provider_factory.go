@@ -68,9 +68,11 @@ func handleGitHubClientError(err error) error {
 	if errors.Is(err, github.ErrGHNotInstalled) {
 		return errors.New("gh CLI is not installed. Install with: brew install gh")
 	}
+
 	if errors.Is(err, github.ErrGHNotAuthenticated) {
 		return errors.New("gh CLI is not authenticated. Run: gh auth login")
 	}
+
 	return fmt.Errorf("failed to initialize GitHub client: %w", err)
 }
 
@@ -91,20 +93,21 @@ func (g *githubProviderShim) ListIssues(_ context.Context, limit int) ([]provide
 		return nil, err
 	}
 
-	var result []providers.Issue
-	for _, issue := range issues {
-		labelNames := make([]string, len(issue.Labels))
-		for i, label := range issue.Labels {
-			labelNames[i] = label.Name
+	result := make([]providers.Issue, 0, len(issues))
+
+	for i := range issues {
+		labelNames := make([]string, len(issues[i].Labels))
+		for j, label := range issues[i].Labels {
+			labelNames[j] = label.Name
 		}
 
 		result = append(result, providers.Issue{
-			ID:     fmt.Sprintf("%d", issue.Number),
-			Number: issue.Number,
-			Title:  issue.Title,
-			Body:   issue.Body,
-			URL:    issue.URL,
-			State:  issue.State,
+			ID:     fmt.Sprintf("%d", issues[i].Number),
+			Number: issues[i].Number,
+			Title:  issues[i].Title,
+			Body:   issues[i].Body,
+			URL:    issues[i].URL,
+			State:  issues[i].State,
 			Labels: labelNames,
 		})
 	}
@@ -123,6 +126,7 @@ func (g *githubProviderShim) GetIssue(_ context.Context, id string) (*providers.
 	}
 
 	labelNames := make([]string, len(issue.Labels))
+
 	for i, label := range issue.Labels {
 		labelNames[i] = label.Name
 	}
@@ -141,6 +145,7 @@ func (g *githubProviderShim) GetIssue(_ context.Context, id string) (*providers.
 func (g *githubProviderShim) IsIssueClosed(_ context.Context, id string) (bool, error) {
 	var issueNum int
 	_, _ = fmt.Sscanf(id, "%d", &issueNum) //nolint:gosec,errcheck
+
 	return g.client.IsIssueMerged(issueNum)
 }
 
@@ -215,9 +220,11 @@ func handleGitLabClientError(err error) error {
 	if errors.Is(err, gitlab.ErrGlabNotInstalled) {
 		return errors.New("glab CLI is not installed. Install with: brew install glab")
 	}
+
 	if errors.Is(err, gitlab.ErrGlabNotAuthenticated) {
 		return errors.New("glab CLI is not authenticated. Run: glab auth login")
 	}
+
 	return fmt.Errorf("failed to initialize GitLab client: %w", err)
 }
 
@@ -237,16 +244,17 @@ func (g *gitlabProviderShim) ListIssues(_ context.Context, limit int) ([]provide
 		return nil, err
 	}
 
-	var result []providers.Issue
-	for _, issue := range issues {
+	result := make([]providers.Issue, 0, len(issues))
+
+	for i := range issues {
 		result = append(result, providers.Issue{
-			ID:     fmt.Sprintf("%d", issue.IID),
-			Number: issue.IID,
-			Title:  issue.Title,
-			Body:   issue.Description,
-			URL:    issue.WebURL,
-			State:  issue.State,
-			Labels: issue.Labels,
+			ID:     fmt.Sprintf("%d", issues[i].IID),
+			Number: issues[i].IID,
+			Title:  issues[i].Title,
+			Body:   issues[i].Description,
+			URL:    issues[i].WebURL,
+			State:  issues[i].State,
+			Labels: issues[i].Labels,
 		})
 	}
 
@@ -276,6 +284,7 @@ func (g *gitlabProviderShim) GetIssue(_ context.Context, id string) (*providers.
 func (g *gitlabProviderShim) IsIssueClosed(_ context.Context, id string) (bool, error) {
 	var issueID int
 	_, _ = fmt.Sscanf(id, "%d", &issueID) //nolint:gosec,errcheck
+
 	return g.client.IsIssueClosed(issueID)
 }
 
