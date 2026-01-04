@@ -67,7 +67,7 @@ func showInteractiveMenu() (bool, error) {
 	endMenuCreate()
 
 	endProgramCreate := perf.StartSpan("tea-program-create")
-	p := tea.NewProgram(menu)
+	p := tea.NewProgram(menu, tea.WithAltScreen())
 	endProgramCreate()
 
 	perf.Mark("menu-ready-to-render")
@@ -2549,7 +2549,7 @@ func RunSessions() error {
 
 	// Show the sessions list
 	list := ui.NewSessionList("Active Tmux Sessions", items)
-	p := tea.NewProgram(list)
+	p := tea.NewProgram(list, tea.WithAltScreen())
 
 	m, err := p.Run()
 	if err != nil {
