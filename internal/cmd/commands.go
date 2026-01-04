@@ -143,8 +143,8 @@ func RunList() error {
 		return fmt.Errorf("error: %w", err)
 	}
 
-	// Get provider for issue/PR status enrichment (ignore errors - provider is optional)
-	prov, _ := GetProviderForRepository(repo)
+	// Get provider for issue/PR status enrichment (provider is optional, errors ignored)
+	prov, _ := GetProviderForRepository(repo) //nolint:errcheck
 
 	// Use ListWorktreesWithAllStatusExcludingMain to get all status information,
 	// excluding the main repository root
@@ -168,8 +168,8 @@ func RunList() error {
 		}
 	}
 
-	// Get current working directory for active worktree indicator
-	currentWtPath, _ := os.Getwd()
+	// Get current working directory for active worktree indicator (errors ignored)
+	currentWtPath, _ := os.Getwd() //nolint:errcheck
 
 	fmt.Printf("Repository: %s\n", repo.SourceFolder)
 	fmt.Printf("Worktree base: %s\n\n", repo.WorktreeBase)
@@ -335,8 +335,8 @@ func promptForCleanup(repo *git.Repository, worktrees []*git.Worktree) error {
 		return fmt.Errorf("error running cleanup prompt: %w", err)
 	}
 
-	confirmModel := model.(ui.CleanupConfirmationModel)
-	if !confirmModel.WasConfirmed() {
+	confirmModel, ok := model.(ui.CleanupConfirmationModel)
+	if !ok || !confirmModel.WasConfirmed() {
 		return nil
 	}
 
