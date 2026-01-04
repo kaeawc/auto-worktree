@@ -709,30 +709,44 @@ func selectIssueInteractiveGeneric(ctx context.Context, provider providers.Provi
 		return nil, fmt.Errorf("no open issues found")
 	}
 
-	// Display issues
-	fmt.Printf("Select an issue:\n\n")
+	// Convert issues to filterable list items
+	items := make([]ui.FilterableListItem, len(issues))
+	issueMap := make(map[string]int) // Map ID to index for lookup after selection
 	for i, issue := range issues {
-		fmt.Printf("%d. %s | %s\n", i+1, issue.ID, issue.Title)
+		items[i] = ui.NewFilterableListItemWithID(issue.ID, issue.Title, issue.Labels, false)
+		issueMap[issue.ID] = i
 	}
 
-	// Get selection from user
-	fmt.Print("\nEnter issue number (or 'q' to quit): ")
-	var input string
-	if _, err := fmt.Scanln(&input); err != nil {
-		return nil, fmt.Errorf("failed to read input: %w", err)
+	// Create and run the filterable list UI
+	model := ui.NewFilterList("Select an issue", items)
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	finalModel, err := p.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run issue selector: %w", err)
 	}
 
-	if input == "q" || input == "" {
-		return nil, fmt.Errorf("canceled")
+	// Get the selected item
+	m, ok := finalModel.(ui.FilterListModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type")
 	}
 
-	// Parse selection
-	selection, err := strconv.Atoi(input)
-	if err != nil || selection < 1 || selection > len(issues) {
-		return nil, fmt.Errorf("invalid selection")
+	if m.Err() != nil {
+		return nil, m.Err()
 	}
 
-	return &issues[selection-1], nil
+	choice := m.Choice()
+	if choice == nil {
+		return nil, fmt.Errorf("no issue selected")
+	}
+
+	// Look up the original issue by ID
+	idx, ok := issueMap[choice.ID()]
+	if !ok {
+		return nil, fmt.Errorf("selected issue not found")
+	}
+
+	return &issues[idx], nil
 }
 
 // startAISessionGeneric starts AI session for any provider
