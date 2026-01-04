@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/google/uuid"
 
+	"github.com/kaeawc/auto-worktree/internal/ai"
 	"github.com/kaeawc/auto-worktree/internal/environment"
 	"github.com/kaeawc/auto-worktree/internal/git"
 	"github.com/kaeawc/auto-worktree/internal/github"
@@ -285,11 +286,22 @@ func RunNew() error {
 	if !exists {
 		fmt.Println("\nSetting up tmux session...")
 		config := git.NewConfig(repo.RootPath)
-		err := createSessionWithMetadata(sessionMgr, config, sessionName, branchName, worktreePath, []string{"bash"})
+
+		// Get configured shell or use user's default shell
+		configuredShell := config.GetWithDefault(git.ConfigTmuxShell, "", git.ConfigScopeAuto)
+		shellCommand := session.GetShellCommand(configuredShell)
+
+		err := createSessionWithMetadata(sessionMgr, config, sessionName, branchName, worktreePath, shellCommand)
 		if err != nil {
 			return fmt.Errorf("failed to create tmux session: %w", err)
 		}
 		fmt.Printf("✓ Tmux session created: %s\n", sessionName)
+
+		// Start AI tool if configured
+		if err := startAIInSession(sessionMgr, config, sessionName); err != nil {
+			fmt.Printf("⚠ Note: %v\n", err)
+			// Non-fatal - continue with session
+		}
 	}
 
 	// Attach to the session
@@ -889,11 +901,22 @@ func RunCreate() error {
 	if !exists {
 		fmt.Println("\nSetting up tmux session...")
 		config := git.NewConfig(repo.RootPath)
-		err := createSessionWithMetadata(sessionMgr, config, sessionName, branchName, worktreePath, []string{"bash"})
+
+		// Get configured shell or use user's default shell
+		configuredShell := config.GetWithDefault(git.ConfigTmuxShell, "", git.ConfigScopeAuto)
+		shellCommand := session.GetShellCommand(configuredShell)
+
+		err := createSessionWithMetadata(sessionMgr, config, sessionName, branchName, worktreePath, shellCommand)
 		if err != nil {
 			return fmt.Errorf("failed to create tmux session: %w", err)
 		}
 		fmt.Printf("✓ Tmux session created: %s\n", sessionName)
+
+		// Start AI tool if configured
+		if err := startAIInSession(sessionMgr, config, sessionName); err != nil {
+			fmt.Printf("⚠ Note: %v\n", err)
+			// Non-fatal - continue with session
+		}
 	}
 
 	fmt.Printf("\nTo start working, attach to the session:\n")
@@ -2088,7 +2111,133 @@ func createSessionWithMetadata(sessionMgr session.Manager, config *git.Config, s
 	return nil
 }
 
-// startAISession starts an AI tool in a background tmux session
+// startAIInSession starts the configured AI tool in the tmux session.
+// If multiple AI tools are available and none is configured, prompts the user to select one.
+// Returns nil if AI tools are disabled or none are available.
+func startAIInSession(_ session.Manager, config *git.Config, sessionName string) error {
+	resolver := ai.NewResolver(config)
+
+	// Check if AI is explicitly disabled
+	if config.GetAITool() == aiToolSkip {
+		return nil // AI disabled, nothing to do
+	}
+
+	// List available AI tools
+	availableTools := resolver.ListAvailable()
+	if len(availableTools) == 0 {
+		return nil // No AI tools installed, nothing to do
+	}
+
+	// Try to resolve the configured/preferred AI tool
+	tool, err := resolver.Resolve()
+	if err != nil {
+		// No tool configured but multiple are available - prompt user to select
+		if len(availableTools) > 1 {
+			selectedTool, err := selectAIToolInteractive(availableTools)
+			if err != nil {
+				return fmt.Errorf("failed to select AI tool: %w", err)
+			}
+			if selectedTool == nil {
+				return nil // User chose to skip
+			}
+			tool = selectedTool
+
+			// Save user's choice for future sessions
+			if err := saveAIToolChoice(config, tool.Name); err != nil {
+				fmt.Printf("⚠ Warning: Failed to save AI tool preference: %v\n", err)
+			}
+		} else if len(availableTools) == 1 {
+			tool = &availableTools[0]
+		} else {
+			return nil // No tools available
+		}
+	}
+
+	// Send the AI command to the tmux session
+	fmt.Printf("Starting %s...\n", tool.Name)
+	if err := sendCommandToSession(sessionName, tool.Command); err != nil {
+		return fmt.Errorf("failed to start %s: %w", tool.Name, err)
+	}
+
+	return nil
+}
+
+// selectAIToolInteractive prompts the user to select an AI tool from the available options
+func selectAIToolInteractive(tools []ai.Tool) (*ai.Tool, error) {
+	items := make([]ui.MenuItem, len(tools)+1)
+	for i, tool := range tools {
+		items[i] = ui.NewMenuItem(tool.Name, strings.Join(tool.Command, " "), tool.Name)
+	}
+	items[len(tools)] = ui.NewMenuItem("Skip", "Don't start any AI tool", aiToolSkip)
+
+	menu := ui.NewMenu("Select an AI coding assistant", items)
+	p := tea.NewProgram(menu)
+
+	m, err := p.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run menu: %w", err)
+	}
+
+	finalModel, ok := m.(ui.MenuModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type")
+	}
+
+	choice := finalModel.Choice()
+	if choice == "" || choice == aiToolSkip {
+		return nil, nil // User chose to skip
+	}
+
+	// Find the selected tool
+	for i := range tools {
+		if tools[i].Name == choice {
+			return &tools[i], nil
+		}
+	}
+
+	return nil, nil
+}
+
+// saveAIToolChoice saves the user's AI tool preference to git config
+func saveAIToolChoice(config *git.Config, toolName string) error {
+	// Map tool name to config value
+	var configValue string
+	switch toolName {
+	case "Claude Code":
+		configValue = "claude"
+	case "Codex":
+		configValue = "codex"
+	case "Gemini CLI":
+		configValue = "gemini"
+	case "Google Jules CLI":
+		configValue = "jules"
+	default:
+		return nil // Unknown tool, don't save
+	}
+
+	return config.SetValidated(git.ConfigAITool, configValue, git.ConfigScopeLocal)
+}
+
+// sendCommandToSession sends a command to an existing tmux session
+func sendCommandToSession(sessionName string, command []string) error {
+	// Build the command string to send
+	cmdStr := strings.Join(command, " ")
+
+	// Use tmux send-keys to send the command to the session
+	args := []string{
+		"send-keys",
+		"-t", sessionName,
+		cmdStr,
+		"Enter",
+	}
+
+	cmd := exec.CommandContext(context.Background(), "tmux", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to send command to session: %w", err)
+	}
+
+	return nil
+}
 
 // selectPRInteractive shows an interactive PR selector with AI-powered priority sorting
 func selectPRInteractive(client *github.Client, repo *git.Repository) (int, error) {

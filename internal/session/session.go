@@ -402,6 +402,38 @@ func escapeAppleScript(s string) string {
 	return s
 }
 
+// GetUserShell returns the user's default shell.
+// It first checks the SHELL environment variable, then falls back to /bin/sh.
+func GetUserShell() string {
+	shell := os.Getenv("SHELL")
+	if shell != "" {
+		return shell
+	}
+	// Fallback to /bin/sh if SHELL is not set
+	return "/bin/sh"
+}
+
+// GetShellCommand returns the shell command to use for tmux sessions.
+// If configuredShell is provided (from git config), it uses that.
+// Otherwise, it returns the user's default shell.
+func GetShellCommand(configuredShell string) []string {
+	if configuredShell != "" {
+		// If configured shell is a path, use it directly
+		// If it's just a shell name (e.g., "zsh"), try to find it in PATH
+		if strings.HasPrefix(configuredShell, "/") {
+			return []string{configuredShell}
+		}
+		// Try to find the shell in PATH
+		if path, err := exec.LookPath(configuredShell); err == nil {
+			return []string{path}
+		}
+		// Fall back to using the name directly
+		return []string{configuredShell}
+	}
+
+	return []string{GetUserShell()}
+}
+
 // SaveSessionMetadata saves metadata for a session
 func (m *SessionManager) SaveSessionMetadata(metadata *Metadata) error {
 	if m.metadataStore == nil {
