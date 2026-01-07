@@ -1438,6 +1438,18 @@ func RunStartupCleanup() error {
 		return fmt.Errorf("error: %w", err)
 	}
 
+	// Check for stale lock files first, as they could interfere with cleanup
+	lockFiles, lockErr := git.DetectLockFiles(repo.RootPath)
+	if lockErr == nil {
+		staleLocks := git.GetStaleLockFiles(lockFiles)
+		if len(staleLocks) > 0 {
+			warning := git.FormatLockFileWarning(staleLocks)
+			if warning != "" {
+				fmt.Fprint(os.Stderr, warning)
+			}
+		}
+	}
+
 	// Get startup cleanup candidates
 	endCandidates := perf.StartSpan("cleanup-get-candidates")
 	candidates, err := repo.GetStartupCleanupCandidates()
@@ -2361,6 +2373,85 @@ func RunPrune() error {
 	}
 
 	fmt.Println("✓ Pruned orphaned worktrees")
+
+	return nil
+}
+
+// RunDoctor performs diagnostic checks on the repository.
+func RunDoctor(checkLocks bool, removeLocks bool) error {
+	repo, err := git.NewRepository()
+	if err != nil {
+		return fmt.Errorf("error: %w", err)
+	}
+
+	fmt.Println("Running repository diagnostics...")
+	fmt.Println()
+
+	// Check for lock files
+	if checkLocks {
+		fmt.Println("🔍 Checking for Git lock files...")
+
+		lockFiles, err := git.DetectLockFiles(repo.RootPath)
+		if err != nil {
+			return fmt.Errorf("error detecting lock files: %w", err)
+		}
+
+		if len(lockFiles) == 0 {
+			fmt.Println("✓ No lock files found")
+			fmt.Println()
+		} else {
+			activeLocks := []git.LockFile{}
+			staleLocks := git.GetStaleLockFiles(lockFiles)
+
+			for _, lf := range lockFiles {
+				if lf.ProcessAlive {
+					activeLocks = append(activeLocks, lf)
+				}
+			}
+
+			if len(activeLocks) > 0 {
+				fmt.Printf("⚠️  Found %d active lock file(s):\n", len(activeLocks))
+				for _, lf := range activeLocks {
+					fmt.Printf("  • %s\n", lf.String())
+				}
+				fmt.Println("\nThese locks belong to running Git processes. Wait for them to complete.")
+			}
+
+			if len(staleLocks) > 0 {
+				fmt.Printf("\n⚠️  Found %d stale lock file(s):\n", len(staleLocks))
+				for _, lf := range staleLocks {
+					fmt.Printf("  • %s\n", lf.String())
+				}
+
+				if removeLocks {
+					fmt.Println("\nRemoving stale lock files...")
+					removedCount := 0
+					for _, lf := range staleLocks {
+						if err := git.RemoveLockFile(lf); err != nil {
+							fmt.Fprintf(os.Stderr, "  ✗ Failed to remove %s: %v\n", lf.Path, err)
+						} else {
+							fmt.Printf("  ✓ Removed %s\n", lf.Path)
+							removedCount++
+						}
+					}
+					fmt.Printf("\n✓ Removed %d stale lock file(s)\n", removedCount)
+				} else {
+					fmt.Println("\nThese lock files may be preventing Git operations.")
+					fmt.Println("To remove them, run: auto-worktree doctor --check-locks --remove-locks")
+					fmt.Println("Or manually: find .git -name '*.lock' -type f -delete")
+				}
+			}
+			fmt.Println()
+		}
+	}
+
+	// Add other diagnostic checks here in the future
+	// - Check for orphaned worktrees
+	// - Check for corrupted refs
+	// - Check for large objects
+	// etc.
+
+	fmt.Println("✓ Diagnostics complete")
 
 	return nil
 }

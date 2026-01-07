@@ -27,7 +27,7 @@ func main() {
 
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "version", "--version", "-v", "help", "--help", "-h":
+		case "version", "--version", "-v", "help", "--help", "-h", "doctor":
 			needsCleanup = false
 		}
 	}
@@ -106,6 +106,9 @@ func runCommand(command string) error {
 	case "prune":
 		return cmd.RunPrune()
 
+	case "doctor":
+		return runDoctorCommand()
+
 	default:
 		fmt.Fprintf(os.Stderr, "Unknown command: %s\n\n", command)
 		showHelp()
@@ -141,6 +144,32 @@ func runRemoveCommand() error {
 	}
 
 	return cmd.RunRemove(os.Args[2])
+}
+
+func runDoctorCommand() error {
+	checkLocks := false
+	removeLocks := false
+
+	// Parse flags
+	for i := 2; i < len(os.Args); i++ {
+		switch os.Args[i] {
+		case "--check-locks":
+			checkLocks = true
+		case "--remove-locks":
+			removeLocks = true
+		default:
+			fmt.Fprintf(os.Stderr, "Unknown flag: %s\n\n", os.Args[i])
+			fmt.Fprintf(os.Stderr, "Usage: auto-worktree doctor [--check-locks] [--remove-locks]\n")
+			os.Exit(1)
+		}
+	}
+
+	// Default to checking locks if no flags provided
+	if !checkLocks && !removeLocks {
+		checkLocks = true
+	}
+
+	return cmd.RunDoctor(checkLocks, removeLocks)
 }
 
 func runSettingsCommand() error {
@@ -224,8 +253,13 @@ COMMANDS:
     settings              Configure per-repository settings
     remove <path>         Remove a worktree
     prune                 Prune orphaned worktrees
+    doctor                Run repository diagnostics
     version               Show version information
     help                  Show this help message
+
+DOCTOR FLAGS:
+    --check-locks         Check for stale Git lock files (default)
+    --remove-locks        Remove stale lock files (use with --check-locks)
 
 EXAMPLES:
     # Show interactive menu
@@ -257,6 +291,12 @@ EXAMPLES:
 
     # Clean up orphaned worktrees
     auto-worktree prune
+
+    # Check for stale lock files
+    auto-worktree doctor --check-locks
+
+    # Remove stale lock files
+    auto-worktree doctor --check-locks --remove-locks
 
 For more information, visit: https://github.com/kaeawc/auto-worktree
 `
