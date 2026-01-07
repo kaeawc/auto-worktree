@@ -136,6 +136,7 @@ aw pr [num]                    # Review a GitHub PR or GitLab MR
 aw list                        # List existing worktrees with session status
 aw sessions                    # View and manage active tmux sessions
 aw settings                    # Configure per-repo settings
+aw doctor                      # Run repository diagnostics (check for lock files, etc.)
 aw help                        # Show help
 ```
 
@@ -403,6 +404,55 @@ sudo apt-get install shellcheck
 ```
 
 **Other platforms:** See [ShellCheck installation instructions](https://github.com/koalaman/shellcheck#installing)
+
+## Troubleshooting
+
+### Stale Git Lock Files
+
+When using auto-worktree with AI agents like Claude Code, background git operations can sometimes leave stale lock files that interfere with worktree operations.
+
+#### Symptoms
+
+```bash
+fatal: Unable to create '.git/index.lock': File exists.
+
+Another git process seems to be running in this repository...
+```
+
+#### Solutions
+
+**1. Run the doctor command:**
+```bash
+aw doctor --check-locks
+```
+
+This will detect and report any stale lock files. To automatically remove them:
+```bash
+aw doctor --check-locks --remove-locks
+```
+
+**2. Automatic detection:**
+
+Auto-worktree now includes:
+- **Retry logic**: Git operations automatically retry up to 3 times when encountering lock file errors
+- **Startup detection**: Lock files are detected during startup and warnings are displayed
+- **Process verification**: Lock files are only considered stale if their owning process no longer exists
+
+**3. Manual cleanup:**
+
+If needed, you can manually remove all lock files:
+```bash
+find .git -name '*.lock' -type f -delete
+```
+
+#### Prevention
+
+The lock file handling is designed to work seamlessly with AI agents:
+- Operations wait briefly for locks to clear before failing
+- Clear warnings are shown when stale locks are detected
+- Lock files are never removed if the process is still running
+
+For more information, see [Issue #175](https://github.com/kaeawc/auto-worktree/issues/175).
 
 ## Why Worktrees?
 

@@ -2,9 +2,11 @@ package git
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
+	"time"
 )
 
 // GitExecutor defines the interface for executing git commands
@@ -25,23 +27,70 @@ func NewGitExecutor() GitExecutor {
 
 // Execute runs a git command and returns the output
 func (e *RealGitExecutor) Execute(args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("git %s failed: %w", strings.Join(args, " "), err)
-	}
-	return strings.TrimSpace(string(output)), nil
+	return e.executeWithRetry("", args...)
 }
 
 // ExecuteInDir runs a git command in a specific directory
 func (e *RealGitExecutor) ExecuteInDir(dir string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		return "", fmt.Errorf("git %s failed in %s: %w", strings.Join(args, " "), dir, err)
+	return e.executeWithRetry(dir, args...)
+}
+
+// executeWithRetry runs a git command with retry logic for lock file errors
+func (e *RealGitExecutor) executeWithRetry(dir string, args ...string) (string, error) {
+	const maxRetries = 3
+	const retryDelay = 1 * time.Second
+
+	var lastErr error
+	var lockFileWarningShown bool
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		cmd := exec.Command("git", args...)
+		if dir != "" {
+			cmd.Dir = dir
+		}
+		output, err := cmd.CombinedOutput()
+
+		if err == nil {
+			return strings.TrimSpace(string(output)), nil
+		}
+
+		lastErr = err
+
+		// Check if this is a lock file error
+		if IsLockFileError(err) {
+			// On first lock file error, detect and warn about stale locks
+			if !lockFileWarningShown {
+				repoPath := dir
+				if repoPath == "" {
+					repoPath = "."
+				}
+
+				lockFiles, detectErr := DetectLockFiles(repoPath)
+				if detectErr == nil && len(lockFiles) > 0 {
+					warning := FormatLockFileWarning(lockFiles)
+					if warning != "" {
+						fmt.Fprint(os.Stderr, warning)
+						lockFileWarningShown = true
+					}
+				}
+			}
+
+			// Retry with delay on lock file errors
+			if attempt < maxRetries-1 {
+				time.Sleep(retryDelay)
+				continue
+			}
+		}
+
+		// For non-lock errors, fail immediately
+		break
 	}
-	return strings.TrimSpace(string(output)), nil
+
+	// Return the error with appropriate context
+	if dir != "" {
+		return "", fmt.Errorf("git %s failed in %s: %w", strings.Join(args, " "), dir, lastErr)
+	}
+	return "", fmt.Errorf("git %s failed: %w", strings.Join(args, " "), lastErr)
 }
 
 // FakeGitExecutor is a fake implementation for testing
