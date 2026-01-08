@@ -31,6 +31,14 @@ import (
 
 const (
 	aiToolSkip = "skip"
+
+	// Status icons
+	iconCheckmark = "✅"
+	iconWarning   = "⚠️"
+	iconError     = "❌"
+	iconCritical  = "🔴"
+	iconInfo      = "ℹ️"
+	iconLightbulb = "💡"
 )
 
 // RunInteractiveMenu displays the main interactive menu with loop support.
@@ -3517,13 +3525,13 @@ func displayHealthCheckResults(results []*git.HealthCheckResult) {
 		var statusIcon string
 		switch severity {
 		case git.SeverityOK:
-			statusIcon = "✅"
+			statusIcon = iconCheckmark
 		case git.SeverityWarning:
-			statusIcon = "⚠️"
+			statusIcon = iconWarning
 		case git.SeverityError:
-			statusIcon = "❌"
+			statusIcon = iconError
 		case git.SeverityCritical:
-			statusIcon = "🔴"
+			statusIcon = iconCritical
 		}
 
 		if result.Healthy {
@@ -3539,13 +3547,13 @@ func displayHealthCheckResults(results []*git.HealthCheckResult) {
 				var icon string
 				switch issue.Severity {
 				case git.SeverityOK:
-					icon = "ℹ️"
+					icon = iconInfo
 				case git.SeverityWarning:
-					icon = "⚠️"
+					icon = iconWarning
 				case git.SeverityError:
-					icon = "❌"
+					icon = iconError
 				case git.SeverityCritical:
-					icon = "🔴"
+					icon = iconCritical
 				}
 
 				fmt.Printf("   %s [%s] %s\n", icon, issue.Category, issue.Description)
@@ -3665,7 +3673,7 @@ func RunRepair() error {
 			fmt.Print("\nProceed with these operations? (y/N): ")
 
 			var response string
-			fmt.Scanln(&response)
+			_, _ = fmt.Scanln(&response) //nolint:errcheck
 
 			if strings.ToLower(strings.TrimSpace(response)) != "y" {
 				fmt.Println("❌ Unsafe repairs skipped")

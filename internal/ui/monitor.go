@@ -11,6 +11,14 @@ import (
 	"github.com/kaeawc/auto-worktree/internal/git"
 )
 
+const (
+	iconCheckmark = "✅"
+	iconWarning   = "⚠️"
+	iconError     = "❌"
+	iconCritical  = "🔴"
+	iconInfo      = "ℹ️"
+)
+
 // MonitorModel represents the health monitoring UI
 type MonitorModel struct {
 	repo     *git.Repository
@@ -101,11 +109,12 @@ func (m *MonitorModel) View() string {
 	statusStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241"))
 
-	if m.running {
+	switch {
+	case m.running:
 		b.WriteString(statusStyle.Render("🔄 Checking..."))
-	} else if m.lastRun.IsZero() {
+	case m.lastRun.IsZero():
 		b.WriteString(statusStyle.Render("⏸️  Initializing..."))
-	} else {
+	default:
 		nextRun := m.lastRun.Add(m.interval)
 		timeUntil := time.Until(nextRun)
 		b.WriteString(statusStyle.Render(fmt.Sprintf("⏰ Last check: %s | Next check in: %s",
@@ -113,6 +122,7 @@ func (m *MonitorModel) View() string {
 			formatMonitorDuration(timeUntil),
 		)))
 	}
+
 	b.WriteString("\n")
 	b.WriteString(statusStyle.Render(fmt.Sprintf("📊 Check interval: %s", formatMonitorDuration(m.interval))))
 	b.WriteString("\n\n")
@@ -135,9 +145,11 @@ func (m *MonitorModel) View() string {
 
 	// Help
 	b.WriteString("\n")
+
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("241")).
 		Italic(true)
+
 	b.WriteString(helpStyle.Render("Press 'r' to refresh now • 'q' or ESC to quit"))
 
 	return b.String()
@@ -157,6 +169,7 @@ func (m *MonitorModel) renderResults() string {
 		} else {
 			unhealthyCount++
 		}
+
 		totalIssues += len(result.Issues)
 	}
 
@@ -173,10 +186,11 @@ func (m *MonitorModel) renderResults() string {
 			Foreground(lipgloss.Color("214"))
 		b.WriteString(warningStyle.Render(fmt.Sprintf("⚠️  %d unhealthy worktree(s) found", unhealthyCount)))
 	}
-	b.WriteString("\n\n")
 
+	b.WriteString("\n\n")
 	b.WriteString(fmt.Sprintf("Total worktrees: %d | Healthy: %d | Unhealthy: %d | Issues: %d\n",
 		len(m.results), healthyCount, unhealthyCount, totalIssues))
+
 	b.WriteString("\n")
 
 	// Detailed results
@@ -205,16 +219,16 @@ func (m *MonitorModel) renderWorktreeResult(result *git.HealthCheckResult) strin
 
 	switch severity {
 	case git.SeverityOK:
-		statusIcon = "✅"
+		statusIcon = iconCheckmark
 		statusColor = "86"
 	case git.SeverityWarning:
-		statusIcon = "⚠️"
+		statusIcon = iconWarning
 		statusColor = "214"
 	case git.SeverityError:
-		statusIcon = "❌"
+		statusIcon = iconError
 		statusColor = "196"
 	case git.SeverityCritical:
-		statusIcon = "🔴"
+		statusIcon = iconCritical
 		statusColor = "196"
 	}
 
@@ -237,19 +251,21 @@ func (m *MonitorModel) renderWorktreeResult(result *git.HealthCheckResult) strin
 			if i >= maxDisplay {
 				remaining := len(result.Issues) - maxDisplay
 				b.WriteString(fmt.Sprintf("   ... and %d more issue(s)\n", remaining))
+
 				break
 			}
 
 			var icon string
+
 			switch issue.Severity {
 			case git.SeverityOK:
-				icon = "ℹ️"
+				icon = iconInfo
 			case git.SeverityWarning:
-				icon = "⚠️"
+				icon = iconWarning
 			case git.SeverityError:
-				icon = "❌"
+				icon = iconError
 			case git.SeverityCritical:
-				icon = "🔴"
+				icon = iconCritical
 			}
 
 			issueStyle := lipgloss.NewStyle().
