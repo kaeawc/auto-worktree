@@ -73,6 +73,7 @@ func (m *MonitorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+
 		return m, nil
 
 	case HealthCheckCompleteMsg:
@@ -80,6 +81,7 @@ func (m *MonitorModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.err = msg.Error
 		m.lastRun = time.Now()
 		m.running = false
+
 		return m, nil
 
 	case TickMsg:
@@ -282,6 +284,7 @@ func (m *MonitorModel) checkHealth() tea.Cmd {
 	return func() tea.Msg {
 		m.running = true
 		results, err := m.repo.PerformHealthCheckAll()
+
 		return HealthCheckCompleteMsg{
 			Results: results,
 			Error:   err,
@@ -309,16 +312,20 @@ func formatMonitorDuration(d time.Duration) string {
 	if d < time.Hour {
 		minutes := int(d.Minutes())
 		seconds := int(d.Seconds()) % 60
+
 		if seconds > 0 {
 			return fmt.Sprintf("%dm %ds", minutes, seconds)
 		}
+
 		return fmt.Sprintf("%dm", minutes)
 	}
 
 	hours := int(d.Hours())
 	minutes := int(d.Minutes()) % 60
+
 	if minutes > 0 {
 		return fmt.Sprintf("%dh %dm", hours, minutes)
 	}
+
 	return fmt.Sprintf("%dh", hours)
 }
