@@ -27,7 +27,7 @@ func main() {
 
 	if len(os.Args) >= 2 {
 		switch os.Args[1] {
-		case "version", "--version", "-v", "help", "--help", "-h", "doctor", "health-check", "health", "repair", "monitor":
+		case "version", "--version", "-v", "help", "--help", "-h", "doctor", "health-check", "health", "repair", "monitor": //nolint:goconst
 			needsCleanup = false
 		}
 	}
@@ -109,7 +109,7 @@ func runCommand(command string) error {
 	case "doctor":
 		return runDoctorCommand()
 
-	case "health-check", "health", "repair", "monitor":
+	case "health-check", "health", "repair", "monitor": //nolint:goconst
 		return runHealthCommand(command)
 
 	default:
@@ -151,7 +151,7 @@ func runRemoveCommand() error {
 
 func runHealthCommand(command string) error {
 	switch command {
-	case "health-check", "health":
+	case "health-check", "health": //nolint:goconst
 		return cmd.RunHealthCheck()
 	case "repair":
 		return cmd.RunRepair()
