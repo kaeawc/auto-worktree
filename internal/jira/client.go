@@ -77,9 +77,9 @@ func (c *Client) exec(ctx context.Context, args ...string) (string, error) {
 }
 
 // ListOpenIssues returns open issues assigned to the current user
-// Uses JQL: assignee = currentUser() AND status != Done
+// Uses JQL: assignee = currentUser() AND statusCategory != Done
 func (c *Client) ListOpenIssues(ctx context.Context) ([]Issue, error) {
-	jql := "assignee = currentUser() AND status != Done"
+	jql := "assignee = currentUser() AND statusCategory != Done"
 	if c.Project != "" {
 		jql = fmt.Sprintf("project = %s AND %s", c.Project, jql)
 	}
@@ -166,4 +166,67 @@ func (c *Client) CreateIssue(ctx context.Context, title, body string) (*Issue, e
 	}
 
 	return &issue, nil
+}
+
+// Epic represents a JIRA epic
+type Epic struct {
+	Key    string `json:"key"`
+	Fields struct {
+		Summary     string `json:"summary"`
+		Description string `json:"description"`
+		Status      struct {
+			Name string `json:"name"`
+		} `json:"status"`
+	} `json:"fields"`
+}
+
+// ListOpenEpics returns open epics in the project
+// Uses JQL: project = <project> AND type = Epic AND statusCategory != Done
+func (c *Client) ListOpenEpics(ctx context.Context) ([]Epic, error) {
+	jql := "type = Epic AND statusCategory != Done"
+	if c.Project != "" {
+		jql = fmt.Sprintf("project = %s AND %s", c.Project, jql)
+	}
+
+	// Use jira issue list with JQL filter and JSON output
+	args := []string{"issue", "list", "--jql", jql, "--json"}
+
+	output, err := c.exec(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list epics: %w", err)
+	}
+
+	var epics []Epic
+
+	if err := json.Unmarshal([]byte(output), &epics); err != nil {
+		return nil, fmt.Errorf("failed to parse epics: %w", err)
+	}
+
+	return epics, nil
+}
+
+// ListIssuesByEpic returns issues linked to a specific epic
+// Uses JQL: "Epic Link" = <epicKey> AND statusCategory != Done
+func (c *Client) ListIssuesByEpic(ctx context.Context, epicKey string) ([]Issue, error) {
+	// JIRA uses "Epic Link" or "parent" field depending on configuration
+	// Try both approaches
+	jql := fmt.Sprintf("(\"Epic Link\" = %s OR parent = %s) AND statusCategory != Done", epicKey, epicKey)
+	if c.Project != "" {
+		jql = fmt.Sprintf("project = %s AND %s", c.Project, jql)
+	}
+
+	args := []string{"issue", "list", "--jql", jql, "--json"}
+
+	output, err := c.exec(ctx, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list issues for epic %s: %w", epicKey, err)
+	}
+
+	var issues []Issue
+
+	if err := json.Unmarshal([]byte(output), &issues); err != nil {
+		return nil, fmt.Errorf("failed to parse issues: %w", err)
+	}
+
+	return issues, nil
 }

@@ -155,6 +155,82 @@ func (g *githubProviderShim) IsIssueClosed(_ context.Context, id string) (bool, 
 	return g.client.IsIssueMerged(issueNum)
 }
 
+func (g *githubProviderShim) ListMilestones(_ context.Context, limit int) ([]providers.Milestone, error) {
+	milestones, err := g.client.ListOpenMilestones(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]providers.Milestone, 0, len(milestones))
+	for i := range milestones {
+		result = append(result, providers.Milestone{
+			ID:           fmt.Sprintf("%d", milestones[i].Number),
+			Number:       milestones[i].Number,
+			Title:        milestones[i].Title,
+			Description:  milestones[i].Description,
+			State:        milestones[i].State,
+			OpenIssues:   milestones[i].OpenIssues,
+			ClosedIssues: milestones[i].ClosedIssues,
+			DueDate:      milestones[i].DueOn,
+			URL:          milestones[i].URL,
+		})
+	}
+
+	return result, nil
+}
+
+func (g *githubProviderShim) ListIssuesByMilestone(_ context.Context, milestoneID string, limit int) ([]providers.Issue, error) {
+	// First, get the milestone to find its title (gh CLI uses title, not number)
+	milestones, err := g.client.ListOpenMilestones(0)
+	if err != nil {
+		return nil, err
+	}
+
+	var milestoneTitle string
+
+	for _, m := range milestones {
+		if fmt.Sprintf("%d", m.Number) == milestoneID {
+			milestoneTitle = m.Title
+			break
+		}
+	}
+
+	if milestoneTitle == "" {
+		return nil, fmt.Errorf("milestone %s not found", milestoneID)
+	}
+
+	issues, err := g.client.ListOpenIssuesByMilestone(milestoneTitle, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]providers.Issue, 0, len(issues))
+
+	for i := range issues {
+		labelNames := make([]string, len(issues[i].Labels))
+
+		for j, label := range issues[i].Labels {
+			labelNames[j] = label.Name
+		}
+
+		result = append(result, providers.Issue{
+			ID:     fmt.Sprintf("%d", issues[i].Number),
+			Number: issues[i].Number,
+			Title:  issues[i].Title,
+			Body:   issues[i].Body,
+			URL:    issues[i].URL,
+			State:  issues[i].State,
+			Labels: labelNames,
+		})
+	}
+
+	return result, nil
+}
+
+func (g *githubProviderShim) MilestoneTerminology() string {
+	return "Milestone"
+}
+
 func (g *githubProviderShim) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {
 	return nil, errors.New("not implemented")
 }
@@ -296,6 +372,74 @@ func (g *gitlabProviderShim) IsIssueClosed(_ context.Context, id string) (bool, 
 	_, _ = fmt.Sscanf(id, "%d", &issueID) //nolint:gosec,errcheck
 
 	return g.client.IsIssueClosed(issueID)
+}
+
+func (g *gitlabProviderShim) ListMilestones(_ context.Context, limit int) ([]providers.Milestone, error) {
+	milestones, err := g.client.ListOpenMilestones(limit)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]providers.Milestone, 0, len(milestones))
+	for i := range milestones {
+		result = append(result, providers.Milestone{
+			ID:          fmt.Sprintf("%d", milestones[i].IID),
+			Number:      milestones[i].IID,
+			Title:       milestones[i].Title,
+			Description: milestones[i].Description,
+			State:       milestones[i].State,
+			DueDate:     milestones[i].DueDate,
+			URL:         milestones[i].WebURL,
+		})
+	}
+
+	return result, nil
+}
+
+func (g *gitlabProviderShim) ListIssuesByMilestone(_ context.Context, milestoneID string, limit int) ([]providers.Issue, error) {
+	// First, get the milestone to find its title (glab CLI uses title)
+	milestones, err := g.client.ListOpenMilestones(0)
+	if err != nil {
+		return nil, err
+	}
+
+	var milestoneTitle string
+
+	for _, m := range milestones {
+		if fmt.Sprintf("%d", m.IID) == milestoneID {
+			milestoneTitle = m.Title
+			break
+		}
+	}
+
+	if milestoneTitle == "" {
+		return nil, fmt.Errorf("milestone %s not found", milestoneID)
+	}
+
+	issues, err := g.client.ListOpenIssuesByMilestone(milestoneTitle, limit)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]providers.Issue, 0, len(issues))
+
+	for i := range issues {
+		result = append(result, providers.Issue{
+			ID:     fmt.Sprintf("%d", issues[i].IID),
+			Number: issues[i].IID,
+			Title:  issues[i].Title,
+			Body:   issues[i].Description,
+			URL:    issues[i].WebURL,
+			State:  issues[i].State,
+			Labels: issues[i].Labels,
+		})
+	}
+
+	return result, nil
+}
+
+func (g *gitlabProviderShim) MilestoneTerminology() string {
+	return "Milestone"
 }
 
 func (g *gitlabProviderShim) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {
@@ -507,6 +651,19 @@ func (l *linearProviderShim) IsIssueClosed(_ context.Context, id string) (bool, 
 	stateType := issue.State.Type
 
 	return stateType == "completed" || stateType == "canceled", nil
+}
+
+func (l *linearProviderShim) ListMilestones(_ context.Context, _ int) ([]providers.Milestone, error) {
+	// Linear uses "Projects" which are not easily accessible via the linear CLI
+	return nil, errors.New("linear does not support project/milestone listing via CLI")
+}
+
+func (l *linearProviderShim) ListIssuesByMilestone(_ context.Context, _ string, _ int) ([]providers.Issue, error) {
+	return nil, errors.New("linear does not support filtering issues by project via CLI")
+}
+
+func (l *linearProviderShim) MilestoneTerminology() string {
+	return "Project"
 }
 
 func (l *linearProviderShim) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {

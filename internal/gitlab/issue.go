@@ -100,3 +100,61 @@ func (i *Issue) FormatForDisplay() string {
 func (i *Issue) BranchName() string {
 	return fmt.Sprintf("work/%d-%s", i.IID, i.SanitizedTitle())
 }
+
+// Milestone represents a GitLab milestone
+type Milestone struct {
+	ID          int    `json:"id"`
+	IID         int    `json:"iid"` // Milestone IID (internal ID, scoped to project)
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	State       string `json:"state"` // "active" or "closed"
+	DueDate     string `json:"due_date"`
+	WebURL      string `json:"web_url"`
+}
+
+// ListOpenMilestones fetches active milestones
+// Uses: glab api projects/:id/milestones?state=active
+func (c *Client) ListOpenMilestones(limit int) ([]Milestone, error) {
+	// glab requires URL-encoded project path
+	projectPath := fmt.Sprintf("%s/%s", c.Owner, c.Project)
+	projectPath = strings.ReplaceAll(projectPath, "/", "%2F")
+
+	args := []string{"api", fmt.Sprintf("projects/%s/milestones?state=active", projectPath)}
+
+	output, err := c.execGlab(args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list milestones: %w", err)
+	}
+
+	var milestones []Milestone
+	if err := json.Unmarshal(output, &milestones); err != nil {
+		return nil, fmt.Errorf("failed to parse milestones: %w", err)
+	}
+
+	// Respect limit
+	if limit > 0 && len(milestones) > limit {
+		milestones = milestones[:limit]
+	}
+
+	return milestones, nil
+}
+
+// ListOpenIssuesByMilestone fetches open issues for a specific milestone
+// Uses: glab issue list --milestone <title> --state opened
+func (c *Client) ListOpenIssuesByMilestone(milestoneTitle string, limit int) ([]Issue, error) {
+	output, err := c.execGlabInRepo("issue", "list",
+		"--milestone", milestoneTitle,
+		"--state", "opened",
+		"--per-page", strconv.Itoa(limit),
+		"--json")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list issues for milestone %s: %w", milestoneTitle, err)
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(output, &issues); err != nil {
+		return nil, fmt.Errorf("failed to parse issues: %w", err)
+	}
+
+	return issues, nil
+}

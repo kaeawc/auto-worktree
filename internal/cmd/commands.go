@@ -32,6 +32,9 @@ import (
 const (
 	aiToolSkip = "skip"
 
+	// Error messages
+	errCanceled = "canceled"
+
 	// Status icons
 	iconCheckmark = "✅"
 	iconWarning   = "⚠️"
@@ -69,6 +72,7 @@ func showInteractiveMenu() (bool, error) {
 		ui.NewMenuItem("New Worktree", "Create a new worktree with a new branch", "new"),
 		ui.NewMenuItem("Resume Worktree", "Resume working on the last worktree", "resume"),
 		ui.NewMenuItem("Work on Issue", "Create worktree for a GitHub/GitLab/JIRA issue", "issue"),
+		ui.NewMenuItem("Work on Milestone/Epic", "Work on issues within a milestone or epic", "milestone"),
 		ui.NewMenuItem("Create Issue", "Create a new issue and start working on it", "create"),
 		ui.NewMenuItem("Review PR", "Review a pull request in a new worktree", "pr"),
 		ui.NewMenuItem("List Worktrees", "Show all existing worktrees", "list"),
@@ -123,6 +127,8 @@ func routeMenuChoice(choice string, _ bool) error {
 		err = RunResume()
 	case "issue":
 		err = RunIssue("")
+	case "milestone":
+		err = RunMilestone()
 	case "create":
 		err = RunCreate()
 	case "pr":
@@ -1047,6 +1053,189 @@ func selectIssueInteractiveGeneric(ctx context.Context, provider providers.Provi
 	return &issues[idx], nil
 }
 
+// RunMilestone shows milestones/epics and allows working on issues within them.
+// The terminology adapts based on the provider (Milestone for GitHub/GitLab, Epic for JIRA).
+func RunMilestone() error {
+	// 1. Initialize repository
+	repo, err := git.NewRepository()
+	if err != nil {
+		return fmt.Errorf("error: %w", err)
+	}
+
+	// 2. Get provider from configuration or auto-detect
+	provider, err := GetProviderForRepository(repo)
+	if err != nil {
+		return err
+	}
+
+	ctx := context.Background()
+	terminology := provider.MilestoneTerminology()
+
+	// 3. Display provider info with correct terminology
+	fmt.Printf("Provider: %s\n", provider.Name())
+	fmt.Printf("Selecting %s...\n\n", terminology)
+
+	// Loop: show milestone selection, then issue selection, return to milestone selection on Esc
+	for {
+		// 4. Get milestones/epics
+		milestone, err := selectMilestoneInteractive(ctx, provider, terminology)
+		if err != nil {
+			// User canceled - return to main menu
+			if err.Error() == errCanceled {
+				return nil
+			}
+			return err
+		}
+
+		if milestone == nil {
+			return nil
+		}
+
+		// 5. Show issues filtered by milestone
+		// Loop for issue selection - return to milestone selection on cancel
+		for {
+			issue, err := selectIssueByMilestoneInteractive(ctx, provider, milestone, terminology)
+			if err != nil {
+				// User canceled - return to milestone selection
+				if err.Error() == errCanceled {
+					fmt.Printf("\nReturning to %s selection...\n\n", terminology)
+					break // Break inner loop, continue outer loop to show milestones again
+				}
+				return err
+			}
+
+			if issue == nil {
+				fmt.Printf("\nReturning to %s selection...\n\n", terminology)
+				break
+			}
+
+			// 6. Work on the selected issue
+			if err := runIssueWithProvider(issue.ID, repo, provider); err != nil {
+				return err
+			}
+
+			// After working on issue, return to main menu
+			return nil
+		}
+	}
+}
+
+// selectMilestoneInteractive shows an interactive milestone/epic selector
+func selectMilestoneInteractive(ctx context.Context, provider providers.Provider, terminology string) (*providers.Milestone, error) {
+	// Fetch milestones/epics
+	milestones, err := provider.ListMilestones(ctx, 20)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list %ss: %w", strings.ToLower(terminology), err)
+	}
+
+	if len(milestones) == 0 {
+		return nil, fmt.Errorf("no open %ss found", strings.ToLower(terminology))
+	}
+
+	// Convert to filterable list items
+	items := make([]ui.FilterableListItem, len(milestones))
+	milestoneMap := make(map[string]int)
+	for i, m := range milestones {
+		// Show issue counts as labels
+		labels := []string{}
+		if m.OpenIssues > 0 || m.ClosedIssues > 0 {
+			labels = append(labels, fmt.Sprintf("%d open", m.OpenIssues))
+			labels = append(labels, fmt.Sprintf("%d closed", m.ClosedIssues))
+		}
+		if m.DueDate != "" {
+			labels = append(labels, fmt.Sprintf("due: %s", m.DueDate))
+		}
+		items[i] = ui.NewFilterableListItemWithID(m.ID, m.Title, labels, false)
+		milestoneMap[m.ID] = i
+	}
+
+	// Create and run the filterable list UI
+	title := fmt.Sprintf("Select a %s", terminology)
+	model := ui.NewFilterList(title, items)
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	finalModel, err := p.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run %s selector: %w", strings.ToLower(terminology), err)
+	}
+
+	// Get the selected item
+	m, ok := finalModel.(ui.FilterListModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type")
+	}
+
+	if m.Err() != nil {
+		return nil, m.Err()
+	}
+
+	choice := m.Choice()
+	if choice == nil {
+		return nil, errors.New(errCanceled)
+	}
+
+	// Look up the original milestone by ID
+	idx, ok := milestoneMap[choice.ID()]
+	if !ok {
+		return nil, fmt.Errorf("selected %s not found", strings.ToLower(terminology))
+	}
+
+	return &milestones[idx], nil
+}
+
+// selectIssueByMilestoneInteractive shows issues filtered by milestone
+func selectIssueByMilestoneInteractive(ctx context.Context, provider providers.Provider, milestone *providers.Milestone, terminology string) (*providers.Issue, error) {
+	// Fetch issues for this milestone
+	issues, err := provider.ListIssuesByMilestone(ctx, milestone.ID, 50)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list issues for %s: %w", strings.ToLower(terminology), err)
+	}
+
+	if len(issues) == 0 {
+		fmt.Printf("No open issues found in %s \"%s\"\n", strings.ToLower(terminology), milestone.Title)
+		return nil, errors.New(errCanceled)
+	}
+
+	// Convert issues to filterable list items
+	items := make([]ui.FilterableListItem, len(issues))
+	issueMap := make(map[string]int)
+	for i, issue := range issues {
+		items[i] = ui.NewFilterableListItemWithID(issue.ID, issue.Title, issue.Labels, false)
+		issueMap[issue.ID] = i
+	}
+
+	// Create and run the filterable list UI
+	title := fmt.Sprintf("Select an issue from %s \"%s\"", strings.ToLower(terminology), milestone.Title)
+	model := ui.NewFilterList(title, items)
+	p := tea.NewProgram(model, tea.WithAltScreen())
+	finalModel, err := p.Run()
+	if err != nil {
+		return nil, fmt.Errorf("failed to run issue selector: %w", err)
+	}
+
+	// Get the selected item
+	m, ok := finalModel.(ui.FilterListModel)
+	if !ok {
+		return nil, fmt.Errorf("unexpected model type")
+	}
+
+	if m.Err() != nil {
+		return nil, m.Err()
+	}
+
+	choice := m.Choice()
+	if choice == nil {
+		return nil, errors.New(errCanceled)
+	}
+
+	// Look up the original issue by ID
+	idx, ok := issueMap[choice.ID()]
+	if !ok {
+		return nil, fmt.Errorf("selected issue not found")
+	}
+
+	return &issues[idx], nil
+}
+
 // RunCreate creates a new issue using any configured provider.
 // Works with GitHub, GitLab, JIRA, and Linear.
 func RunCreate() error {
@@ -1077,7 +1266,7 @@ func RunCreate() error {
 		return fmt.Errorf("unexpected model type")
 	}
 	if titleModel.Err() != nil {
-		return fmt.Errorf("canceled")
+		return errors.New(errCanceled)
 	}
 
 	title := titleModel.Value()
@@ -1098,7 +1287,7 @@ func RunCreate() error {
 		return fmt.Errorf("unexpected model type")
 	}
 	if bodyModel.Err() != nil {
-		return fmt.Errorf("canceled")
+		return errors.New(errCanceled)
 	}
 
 	body := bodyModel.Value()

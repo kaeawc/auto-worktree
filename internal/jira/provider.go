@@ -119,6 +119,77 @@ func (p *Provider) IsIssueClosed(ctx context.Context, id string) (bool, error) {
 	return isClosed, err
 }
 
+// ListMilestones returns all open epics (JIRA's equivalent of milestones)
+func (p *Provider) ListMilestones(ctx context.Context, limit int) ([]providers.Milestone, error) {
+	epics, err := p.client.ListOpenEpics(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	capacity := len(epics)
+	if limit > 0 && limit < capacity {
+		capacity = limit
+	}
+
+	milestones := make([]providers.Milestone, 0, capacity)
+	for i := range epics {
+		milestones = append(milestones, providers.Milestone{
+			ID:          epics[i].Key,
+			Title:       epics[i].Fields.Summary,
+			Description: epics[i].Fields.Description,
+			State:       epics[i].Fields.Status.Name,
+		})
+
+		if limit > 0 && len(milestones) >= limit {
+			break
+		}
+	}
+
+	return milestones, nil
+}
+
+// ListIssuesByMilestone returns issues linked to a specific epic
+func (p *Provider) ListIssuesByMilestone(ctx context.Context, milestoneID string, limit int) ([]providers.Issue, error) {
+	jiraIssues, err := p.client.ListIssuesByEpic(ctx, milestoneID)
+	if err != nil {
+		return nil, err
+	}
+
+	capacity := len(jiraIssues)
+	if limit > 0 && limit < capacity {
+		capacity = limit
+	}
+
+	issues := make([]providers.Issue, 0, capacity)
+	for i := range jiraIssues {
+		issues = append(issues, providers.Issue{
+			ID:        jiraIssues[i].Key,
+			Key:       jiraIssues[i].Key,
+			Title:     jiraIssues[i].Fields.Summary,
+			Body:      jiraIssues[i].Fields.Description,
+			URL:       jiraIssues[i].Fields.URL,
+			State:     jiraIssues[i].Fields.Status.Name,
+			Labels:    jiraIssues[i].Fields.Labels,
+			Author:    jiraIssues[i].Fields.Creator.DisplayName,
+			CreatedAt: jiraIssues[i].Fields.Created,
+			UpdatedAt: jiraIssues[i].Fields.Updated,
+			Assignee:  jiraIssues[i].Fields.Assignee.DisplayName,
+			IsClosed:  jiraIssues[i].IsClosed(),
+		})
+
+		if limit > 0 && len(issues) >= limit {
+			break
+		}
+	}
+
+	return issues, nil
+}
+
+// MilestoneTerminology returns "Epic" for JIRA
+func (p *Provider) MilestoneTerminology() string {
+	return "Epic"
+}
+
 // ListPullRequests is not applicable for JIRA
 func (p *Provider) ListPullRequests(_ context.Context, _ int) ([]providers.PullRequest, error) {
 	return nil, fmt.Errorf("JIRA does not have pull requests")

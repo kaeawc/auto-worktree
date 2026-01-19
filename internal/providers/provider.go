@@ -16,6 +16,18 @@ type Provider interface {
 	// IsIssueClosed returns true if an issue is closed.
 	IsIssueClosed(ctx context.Context, id string) (bool, error)
 
+	// ListMilestones returns all open milestones/epics.
+	// Limit controls how many to fetch (0 means default limit).
+	ListMilestones(ctx context.Context, limit int) ([]Milestone, error)
+
+	// ListIssuesByMilestone returns issues filtered by milestone/epic ID.
+	// Limit controls how many issues to fetch (0 means default limit).
+	ListIssuesByMilestone(ctx context.Context, milestoneID string, limit int) ([]Issue, error)
+
+	// MilestoneTerminology returns the provider-specific term for milestones.
+	// Returns "Milestone" for GitHub/GitLab, "Epic" for JIRA, "Project" for Linear.
+	MilestoneTerminology() string
+
 	// ListPullRequests returns all open pull requests.
 	// Limit controls how many PRs to fetch (0 means default limit).
 	ListPullRequests(ctx context.Context, limit int) ([]PullRequest, error)
@@ -111,6 +123,30 @@ type PullRequest struct {
 	ReviewersRequested []string
 	// Approvals are the reviewers who have approved
 	Approvals []string
+}
+
+// Milestone represents a milestone/epic/project in a provider.
+// GitHub and GitLab call these "Milestones", JIRA calls them "Epics",
+// Linear calls them "Projects".
+type Milestone struct {
+	// ID is the unique identifier
+	ID string
+	// Number is the milestone number (GitHub specific)
+	Number int
+	// Title is the milestone title
+	Title string
+	// Description is the milestone description
+	Description string
+	// State is the milestone state ("open", "closed")
+	State string
+	// OpenIssues is the count of open issues
+	OpenIssues int
+	// ClosedIssues is the count of closed issues
+	ClosedIssues int
+	// DueDate is the optional due date
+	DueDate string
+	// URL is the milestone URL
+	URL string
 }
 
 // Config contains provider-specific configuration.

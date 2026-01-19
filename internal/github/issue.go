@@ -138,3 +138,86 @@ func (i *Issue) FormatForDisplay() string {
 func (i *Issue) BranchName() string {
 	return fmt.Sprintf("work/%d-%s", i.Number, i.SanitizedTitle())
 }
+
+// Milestone represents a GitHub milestone
+type Milestone struct {
+	Number       int    `json:"number"`
+	Title        string `json:"title"`
+	Description  string `json:"description"`
+	State        string `json:"state"` // "OPEN" or "CLOSED"
+	OpenIssues   int    `json:"openIssues"`
+	ClosedIssues int    `json:"closedIssues"`
+	DueOn        string `json:"dueOn"`
+	URL          string `json:"url"`
+}
+
+// ListOpenMilestones fetches open milestones
+// Uses: gh api repos/{owner}/{repo}/milestones --jq '.[] | select(.state == "open")'
+func (c *Client) ListOpenMilestones(limit int) ([]Milestone, error) {
+	// Use gh api to get milestones
+	output, err := c.execGHInRepo("api",
+		fmt.Sprintf("repos/%s/%s/milestones", c.Owner, c.Repo),
+		"--jq", ".",
+	)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list milestones: %w", err)
+	}
+
+	// GitHub API returns milestones with lowercase field names
+	var apiMilestones []struct {
+		Number       int    `json:"number"`
+		Title        string `json:"title"`
+		Description  string `json:"description"`
+		State        string `json:"state"` // "open" or "closed"
+		OpenIssues   int    `json:"open_issues"`
+		ClosedIssues int    `json:"closed_issues"`
+		DueOn        string `json:"due_on"`
+		HTMLURL      string `json:"html_url"`
+	}
+	if err := json.Unmarshal(output, &apiMilestones); err != nil {
+		return nil, fmt.Errorf("failed to parse milestones: %w", err)
+	}
+
+	// Convert to our Milestone struct, filtering to open only
+	milestones := make([]Milestone, 0, len(apiMilestones))
+	for _, m := range apiMilestones {
+		if m.State != "open" {
+			continue
+		}
+		milestones = append(milestones, Milestone{
+			Number:       m.Number,
+			Title:        m.Title,
+			Description:  m.Description,
+			State:        strings.ToUpper(m.State),
+			OpenIssues:   m.OpenIssues,
+			ClosedIssues: m.ClosedIssues,
+			DueOn:        m.DueOn,
+			URL:          m.HTMLURL,
+		})
+		if limit > 0 && len(milestones) >= limit {
+			break
+		}
+	}
+
+	return milestones, nil
+}
+
+// ListOpenIssuesByMilestone fetches open issues for a specific milestone
+// Uses: gh issue list --milestone <title> --state open --json number,title,labels,url
+func (c *Client) ListOpenIssuesByMilestone(milestoneTitle string, limit int) ([]Issue, error) {
+	output, err := c.execGHInRepo("issue", "list",
+		"--milestone", milestoneTitle,
+		"--limit", strconv.Itoa(limit),
+		"--state", "open",
+		"--json", "number,title,labels,url")
+	if err != nil {
+		return nil, fmt.Errorf("failed to list issues for milestone %s: %w", milestoneTitle, err)
+	}
+
+	var issues []Issue
+	if err := json.Unmarshal(output, &issues); err != nil {
+		return nil, fmt.Errorf("failed to parse issues: %w", err)
+	}
+
+	return issues, nil
+}

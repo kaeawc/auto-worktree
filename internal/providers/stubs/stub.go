@@ -20,12 +20,18 @@ type StubProvider struct {
 	Issues map[string]*providers.Issue
 	// PRs stored by ID
 	PullRequests map[string]*providers.PullRequest
+	// Milestones stored by ID
+	Milestones map[string]*providers.Milestone
+	// IssuesByMilestone maps milestone ID to issue IDs
+	IssuesByMilestone map[string][]string
 	// Errors to return for specific operations
 	Errors map[string]error
 	// Method call tracking for assertions
 	Calls []MethodCall
 	// Config for the provider
 	Config *providers.Config
+	// MilestoneTerminologyValue is the term used for milestones
+	MilestoneTerminologyValue string
 }
 
 // MethodCall tracks a method call for assertion purposes.
@@ -36,14 +42,25 @@ type MethodCall struct {
 
 // NewStubProvider creates a new stub provider with no data.
 func NewStubProvider(name, providerType string) *StubProvider {
+	terminology := "Milestone"
+
+	if providerType == "jira" {
+		terminology = "Epic"
+	} else if providerType == "linear" {
+		terminology = "Project"
+	}
+
 	return &StubProvider{
-		ProviderName:      name,
-		ProviderTypeValue: providerType,
-		Issues:            make(map[string]*providers.Issue),
-		PullRequests:      make(map[string]*providers.PullRequest),
-		Errors:            make(map[string]error),
-		Calls:             []MethodCall{},
-		Config:            &providers.Config{},
+		ProviderName:              name,
+		ProviderTypeValue:         providerType,
+		Issues:                    make(map[string]*providers.Issue),
+		PullRequests:              make(map[string]*providers.PullRequest),
+		Milestones:                make(map[string]*providers.Milestone),
+		IssuesByMilestone:         make(map[string][]string),
+		Errors:                    make(map[string]error),
+		Calls:                     []MethodCall{},
+		Config:                    &providers.Config{},
+		MilestoneTerminologyValue: terminology,
 	}
 }
 
@@ -316,6 +333,82 @@ func (s *StubProvider) IsIssueClosed(_ context.Context, id string) (bool, error)
 	return issue.IsClosed, nil
 }
 
+// ListMilestones returns all milestones.
+func (s *StubProvider) ListMilestones(_ context.Context, limit int) ([]providers.Milestone, error) {
+	s.recordCall("ListMilestones", limit)
+
+	if err, ok := s.Errors["ListMilestones"]; ok {
+		return nil, err
+	}
+
+	milestones := make([]providers.Milestone, 0, len(s.Milestones))
+	for _, milestone := range s.Milestones {
+		milestones = append(milestones, *milestone)
+	}
+
+	sort.Slice(milestones, func(i, j int) bool {
+		return milestones[i].ID < milestones[j].ID
+	})
+
+	if limit > 0 && len(milestones) > limit {
+		milestones = milestones[:limit]
+	}
+
+	return milestones, nil
+}
+
+// ListIssuesByMilestone returns issues filtered by milestone ID.
+func (s *StubProvider) ListIssuesByMilestone(_ context.Context, milestoneID string, limit int) ([]providers.Issue, error) {
+	s.recordCall("ListIssuesByMilestone", map[string]interface{}{"milestoneID": milestoneID, "limit": limit})
+
+	if err, ok := s.Errors["ListIssuesByMilestone"]; ok {
+		return nil, err
+	}
+
+	issueIDs, ok := s.IssuesByMilestone[milestoneID]
+	if !ok {
+		return []providers.Issue{}, nil
+	}
+
+	issues := make([]providers.Issue, 0, len(issueIDs))
+
+	for _, id := range issueIDs {
+		if issue, ok := s.Issues[id]; ok {
+			issues = append(issues, *issue)
+		}
+	}
+
+	if limit > 0 && len(issues) > limit {
+		issues = issues[:limit]
+	}
+
+	return issues, nil
+}
+
+// MilestoneTerminology returns the provider-specific term for milestones.
+func (s *StubProvider) MilestoneTerminology() string {
+	s.recordCall("MilestoneTerminology", nil)
+	return s.MilestoneTerminologyValue
+}
+
+// AddMilestone adds a milestone to the stub provider.
+func (s *StubProvider) AddMilestone(milestone *providers.Milestone) {
+	if s.Milestones == nil {
+		s.Milestones = make(map[string]*providers.Milestone)
+	}
+
+	s.Milestones[milestone.ID] = milestone
+}
+
+// AddIssueToMilestone links an issue to a milestone.
+func (s *StubProvider) AddIssueToMilestone(milestoneID, issueID string) {
+	if s.IssuesByMilestone == nil {
+		s.IssuesByMilestone = make(map[string][]string)
+	}
+
+	s.IssuesByMilestone[milestoneID] = append(s.IssuesByMilestone[milestoneID], issueID)
+}
+
 // ListPullRequests returns all pull requests.
 func (s *StubProvider) ListPullRequests(_ context.Context, limit int) ([]providers.PullRequest, error) { //nolint:dupl
 	s.recordCall("ListPullRequests", limit)
@@ -500,6 +593,8 @@ func (s *StubProvider) GetCallCount(method string) int {
 func (s *StubProvider) Reset() {
 	s.Issues = make(map[string]*providers.Issue)
 	s.PullRequests = make(map[string]*providers.PullRequest)
+	s.Milestones = make(map[string]*providers.Milestone)
+	s.IssuesByMilestone = make(map[string][]string)
 	s.Errors = make(map[string]error)
 	s.Calls = []MethodCall{}
 }
