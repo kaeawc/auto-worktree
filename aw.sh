@@ -4384,13 +4384,26 @@ _aw_pr() {
   # Create worktree for the PR/MR
   mkdir -p "$_AW_WORKTREE_BASE"
 
-  # Fetch the PR/MR branch and create worktree with proper tracking
+  # Fetch the PR/MR branch - first fetch to FETCH_HEAD, then handle local branch
   if [[ "$provider" == "gitlab" ]]; then
-    gum spin --spinner dot --title "Fetching MR branch..." -- git fetch origin "merge-requests/${pr_num}/head:${head_ref}" 2>/dev/null || \
-      git fetch origin "${head_ref}:${head_ref}" 2>/dev/null
+    gum spin --spinner dot --title "Fetching MR branch..." -- git fetch origin "merge-requests/${pr_num}/head" 2>/dev/null || \
+      git fetch origin "${head_ref}" 2>/dev/null
   else
-    gum spin --spinner dot --title "Fetching PR branch..." -- git fetch origin "pull/${pr_num}/head:${head_ref}" 2>/dev/null || \
-      git fetch origin "${head_ref}:${head_ref}" 2>/dev/null
+    gum spin --spinner dot --title "Fetching PR branch..." -- git fetch origin "pull/${pr_num}/head" 2>/dev/null || \
+      git fetch origin "${head_ref}" 2>/dev/null
+  fi
+
+  # Check if local branch exists and update/create it from FETCH_HEAD
+  if git show-ref --verify --quiet "refs/heads/${head_ref}" 2>/dev/null; then
+    # Branch exists locally - check if it's checked out elsewhere
+    local branch_worktree=$(git worktree list --porcelain 2>/dev/null | grep -A2 "^worktree " | grep -B1 "branch refs/heads/${head_ref}$" | head -1 | sed 's/^worktree //')
+    if [[ -z "$branch_worktree" ]]; then
+      # Branch exists but not checked out, update it to FETCH_HEAD
+      git branch -f "${head_ref}" FETCH_HEAD 2>/dev/null
+    fi
+  else
+    # Branch doesn't exist, create it from FETCH_HEAD
+    git branch "${head_ref}" FETCH_HEAD 2>/dev/null
   fi
 
   # Create worktree with the PR/MR branch
