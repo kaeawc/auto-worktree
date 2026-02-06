@@ -383,10 +383,10 @@ AI agents (Claude Code, Cursor, GitHub Copilot Workspace) frequently run git com
    # Settings → Version Control → Git → Uncheck "Auto-update"
    ```
 
-4. **Use Status Command to Check Activity**
+4. **Check for Active Agents**
    ```bash
    # Before starting second agent, check if any are running
-   aw sessions  # Shows active tmux sessions with agents
+   aw list  # Shows worktrees and their status
 
    # Only start new agent if no others are active
    ```
@@ -413,20 +413,7 @@ start_agent() {
 }
 ```
 
-#### Strategy 2: Tmux Session Management
-
-```bash
-# Use auto-worktree's built-in session tracking
-aw sessions  # View all active sessions
-
-# Pause session before starting another in same repo
-aw sessions  # Select session to pause
-
-# Resume when ready
-aw sessions  # Select session to resume
-```
-
-#### Strategy 3: Manual Coordination
+#### Strategy 2: Manual Coordination
 
 ```bash
 # Simple terminal-based coordination
