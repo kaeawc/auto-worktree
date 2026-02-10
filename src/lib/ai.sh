@@ -3,6 +3,17 @@
 # ============================================================================
 # AI Command Resolution
 # ============================================================================
+
+# Check whether the active AI tool has a resumable session in the current directory
+_ai_has_resumable_session() {
+  case "$AI_CMD_NAME" in
+    "Claude Code")        [[ -d ".claude" ]] ;;
+    "Codex")              [[ -d ".codex" ]] ;;
+    "Gemini CLI")         [[ -d ".gemini" ]] ;;
+    *)                    return 1 ;;
+  esac
+}
+
 _load_ai_preference() {
   git config --get auto-worktree.ai-tool 2>/dev/null || echo ""
 }

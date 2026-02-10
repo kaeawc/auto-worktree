@@ -44,11 +44,17 @@ _aw_ensure_pr_worktree() {
       local local_sha
       local_sha=$(git -C "$worktree_path" rev-parse HEAD 2>/dev/null)
       if [[ "$local_sha" != "$fetched_sha" ]]; then
-        # Check for uncommitted changes
+        local do_reset=true
+        # Check for uncommitted changes and confirm before discarding
         if ! git -C "$worktree_path" diff --quiet 2>/dev/null || ! git -C "$worktree_path" diff --cached --quiet 2>/dev/null; then
-          gum style --foreground 3 "Warning: uncommitted changes in worktree will be discarded"
+          if ! gum confirm "Uncommitted changes in worktree will be discarded. Update to latest?"; then
+            do_reset=false
+            gum style --foreground 3 "Keeping existing worktree state"
+          fi
         fi
-        gum spin --spinner dot --title "Updating worktree to latest..." -- git -C "$worktree_path" reset --hard "$fetched_sha"
+        if [[ "$do_reset" == "true" ]]; then
+          gum spin --spinner dot --title "Updating worktree to latest..." -- git -C "$worktree_path" reset --hard "$fetched_sha"
+        fi
       fi
     fi
     cd "$worktree_path" || return 1
@@ -180,7 +186,7 @@ _aw_pr_launch_ai() {
   echo ""
 
   # For "continue" mode, try to resume an existing AI conversation
-  if [[ "$action" == "continue" ]] && [[ -d ".claude" ]]; then
+  if [[ "$action" == "continue" ]] && _ai_has_resumable_session; then
     gum style --foreground 2 "Resuming $AI_CMD_NAME session..."
     "${AI_RESUME_CMD[@]}"
   else
