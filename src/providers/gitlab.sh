@@ -184,6 +184,85 @@ _aw_gitlab_get_mr_details() {
   return 0
 }
 
+_aw_gitlab_list_milestones() {
+  # List active GitLab milestones
+  # Output format: IID | Title | [due: DATE]
+  local project=$(_aw_get_gitlab_project)
+
+  # Build glab command with server option if configured
+  local glab_cmd="glab"
+  local server=$(_aw_get_gitlab_server)
+  if [[ -n "$server" ]]; then
+    glab_cmd="glab --host $server"
+  fi
+
+  # URL-encode the project path for the API
+  local project_path=""
+  if [[ -n "$project" ]]; then
+    project_path="${project//\//%2F}"
+  else
+    # Auto-detect from current repo
+    project_path=$($glab_cmd repo view --json fullPath --jq '.fullPath' 2>/dev/null | sed 's/\//%2F/g')
+  fi
+
+  if [[ -z "$project_path" ]]; then
+    return 1
+  fi
+
+  $glab_cmd api "projects/$project_path/milestones?state=active" 2>/dev/null | \
+    jq -r '.[] | [.iid, .title, .due_date // ""] | @tsv' | \
+    while IFS=$'\t' read -r iid title due_date; do
+      local labels=""
+      if [[ -n "$due_date" ]]; then
+        labels=" | [due: ${due_date}]"
+      fi
+      echo "${iid} | ${title}${labels}"
+    done
+}
+
+_aw_gitlab_list_issues_by_milestone() {
+  # List open issues for a specific milestone
+  # Args: $1 = milestone title
+  # Output format: #IID | Title | [label1] [label2]
+  local milestone_title="$1"
+  local project=$(_aw_get_gitlab_project)
+
+  if [[ -z "$milestone_title" ]]; then
+    return 1
+  fi
+
+  # Build glab command with server option if configured
+  local glab_cmd="glab"
+  local server=$(_aw_get_gitlab_server)
+  if [[ -n "$server" ]]; then
+    glab_cmd="glab --host $server"
+  fi
+
+  # Add project filter if configured
+  local project_args=""
+  if [[ -n "$project" ]]; then
+    project_args="--repo $project"
+  fi
+
+  # shellcheck disable=SC2086
+  $glab_cmd issue list --milestone "$milestone_title" --state opened --per-page 100 $project_args 2>/dev/null | \
+    awk -F'\t' '{
+      if ($1 ~ /^#[0-9]+/) {
+        number = $1
+        title = $2
+        labels = $3
+
+        printf "%s | %s", number, title
+        if (labels != "" && labels != "()") {
+          gsub(/[()]/, "", labels)
+          gsub(/, /, "][", labels)
+          printf " | [%s]", labels
+        }
+        printf "\n"
+      }
+    }'
+}
+
 _aw_gitlab_check_mr_merged() {
   # Check if a GitLab MR is merged for a given branch
   # Returns 0 if merged, 1 if not merged or error

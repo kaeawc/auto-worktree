@@ -181,6 +181,18 @@ _aw_get_default_branch() {
   return 1
 }
 
+_aw_milestone_terminology() {
+  # Return the provider-specific term for milestones
+  # GitHub/GitLab = "Milestone", JIRA = "Epic", Linear = "Project"
+  local provider="$1"
+
+  case "$provider" in
+    jira)   echo "Epic" ;;
+    linear) echo "Project" ;;
+    *)      echo "Milestone" ;;
+  esac
+}
+
 _aw_check_no_changes_from_default() {
   # Check if a worktree has no changes from the default branch HEAD
   # Returns 0 if no changes, 1 otherwise

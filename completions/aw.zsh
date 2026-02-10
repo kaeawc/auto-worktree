@@ -9,6 +9,7 @@ _auto_worktree() {
     'new:Create a new worktree'
     'resume:Resume an existing worktree'
     'issue:Work on an issue (GitHub, GitLab, JIRA, or Linear)'
+    'milestone:Work on a Milestone/Epic (filter issues by milestone)'
     'create:Create a new issue with optional template'
     'pr:Review a GitHub PR or GitLab MR'
     'list:List existing worktrees'
