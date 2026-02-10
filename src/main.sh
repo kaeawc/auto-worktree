@@ -7,6 +7,7 @@
 #   auto-worktree new                # Create new worktree
 #   auto-worktree resume             # Resume existing worktree
 #   auto-worktree issue [id]         # Work on an issue (GitHub #123, GitLab #456, or JIRA PROJ-123)
+#   auto-worktree milestone          # Work on a Milestone/Epic
 #   auto-worktree pr [num]           # Review a GitHub PR or GitLab MR
 #   auto-worktree list               # List existing worktrees
 #   auto-worktree settings           # Configure per-repository settings
@@ -70,6 +71,8 @@ source "$_AW_SRC_DIR/commands/pr.sh"
 source "$_AW_SRC_DIR/commands/resume.sh"
 # shellcheck source=commands/cleanup.sh
 source "$_AW_SRC_DIR/commands/cleanup.sh"
+# shellcheck source=commands/milestone.sh
+source "$_AW_SRC_DIR/commands/milestone.sh"
 # shellcheck source=commands/menu.sh
 source "$_AW_SRC_DIR/commands/menu.sh"
 
@@ -82,8 +85,9 @@ auto-worktree() {
 
   case "${1:-}" in
     new)     shift; _aw_new "$@" ;;
-    issue)   shift; _aw_issue "$@" ;;
-    create)  shift; _aw_create_issue "$@" ;;
+    issue)      shift; _aw_issue "$@" ;;
+    milestone)  shift; _aw_milestone "$@" ;;
+    create)     shift; _aw_create_issue "$@" ;;
     pr)      shift; _aw_pr "$@" ;;
     resume)  shift; _aw_resume ;;
     list)    shift; _aw_list ;;
@@ -96,6 +100,7 @@ auto-worktree() {
       echo "  new             Create a new worktree"
       echo "  resume          Resume an existing worktree"
       echo "  issue [id]      Work on an issue (GitHub #123, GitLab #456, JIRA PROJ-123, or Linear TEAM-123)"
+      echo "  milestone       Work on a Milestone/Epic (filter issues by milestone)"
       echo "  create          Create a new issue with optional template"
       echo "  pr [num]        Review a GitHub PR or GitLab MR"
       echo "  list            List existing worktrees"

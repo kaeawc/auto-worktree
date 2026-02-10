@@ -33,6 +33,7 @@ SOURCE_FILES=(
   "$SRC_DIR/commands/pr.sh"
   "$SRC_DIR/commands/resume.sh"
   "$SRC_DIR/commands/cleanup.sh"
+  "$SRC_DIR/commands/milestone.sh"
   "$SRC_DIR/commands/menu.sh"
 )
 
@@ -47,6 +48,7 @@ cat > "$OUTPUT" << 'HEADER'
 #   auto-worktree new                # Create new worktree
 #   auto-worktree resume             # Resume existing worktree
 #   auto-worktree issue [id]         # Work on an issue (GitHub #123, GitLab #456, or JIRA PROJ-123)
+#   auto-worktree milestone          # Work on a Milestone/Epic
 #   auto-worktree pr [num]           # Review a GitHub PR or GitLab MR
 #   auto-worktree list               # List existing worktrees
 #   auto-worktree settings           # Configure per-repository settings

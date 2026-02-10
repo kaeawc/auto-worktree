@@ -16,6 +16,7 @@ _aw_menu() {
     "New worktree" \
     "Resume worktree" \
     "Work on issue" \
+    "Work on Milestone/Epic" \
     "Create issue" \
     "Review PR" \
     "Cleanup worktrees" \
@@ -23,13 +24,14 @@ _aw_menu() {
     "Cancel")
 
   case "$choice" in
-    "New worktree")       _aw_new true ;;
-    "Resume worktree")    _aw_resume ;;
-    "Work on issue")      _aw_issue ;;
-    "Create issue")       _aw_create_issue ;;
-    "Review PR")          _aw_pr ;;
-    "Cleanup worktrees")  _aw_cleanup_interactive ;;
-    "Settings")           _aw_settings_menu ;;
-    *)                    return 0 ;;
+    "New worktree")              _aw_new true ;;
+    "Resume worktree")           _aw_resume ;;
+    "Work on issue")             _aw_issue ;;
+    "Work on Milestone/Epic")    _aw_milestone ;;
+    "Create issue")              _aw_create_issue ;;
+    "Review PR")                 _aw_pr ;;
+    "Cleanup worktrees")         _aw_cleanup_interactive ;;
+    "Settings")                  _aw_settings_menu ;;
+    *)                           return 0 ;;
   esac
 }

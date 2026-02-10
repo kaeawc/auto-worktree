@@ -6,7 +6,7 @@ _auto_worktree_completions() {
   _init_completion || return
 
   # Define available commands
-  local commands="new resume issue create pr list cleanup settings help"
+  local commands="new resume issue milestone create pr list cleanup settings help"
 
   # If we're completing the first argument (the command)
   if [[ $cword -eq 1 ]]; then
@@ -51,7 +51,7 @@ _auto_worktree_completions() {
         mapfile -t COMPREPLY < <(compgen -W "$settings_commands" -- "$cur")
       fi
       ;;
-    new|resume|create|list|cleanup|help)
+    new|resume|milestone|create|list|cleanup|help)
       # These commands don't have specific completions
       COMPREPLY=()
       ;;
