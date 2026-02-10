@@ -1,21 +1,3 @@
 .menv/
-
-# Go build artifacts
-build/
-bin/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-
-# Go test coverage
-*.out
-coverage.html
-
-# Go vendor directory
-vendor/
-
 aw
-auto-worktree
-
+dist/

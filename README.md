@@ -9,13 +9,11 @@ A bash tool for safely running AI agents in isolated git worktrees. Create separ
 - **Isolated Workspaces**: Each task gets its own worktree - no branch conflicts or stashed changes
 - **Issue Tracking Integration**: Work on GitHub issues, GitLab issues, JIRA tickets, or Linear issues with automatic branch naming
 - **GitHub PR Reviews**: Review pull requests in isolated worktrees
-- **Interactive TUI**: Beautiful menus powered by Bubbletea
+- **Interactive TUI**: Beautiful menus powered by gum
 - **Auto-cleanup**: Detects merged PRs, closed issues, resolved JIRA tickets, and completed Linear issues
 - **Random Names**: Generates memorable branch names like `work/coral-apex-beam`
 - **Tab Completion**: Full zsh completion for commands, issues, and PRs
 - **AI Agent Support**: Integrates with Claude Code, Codex CLI, or Gemini CLI
-- **Tmux Session Management**: Persistent session tracking with pause/resume, status monitoring, and auto-dependency installation
-
 ## Safety Warning: Concurrent Git Operations
 
 **IMPORTANT**: While git worktrees safely isolate branches and working directories, **git itself is not designed for concurrent operations**. Running multiple git commands simultaneously across different worktrees can cause repository corruption.
@@ -133,8 +131,7 @@ aw                             # Interactive menu
 aw new                         # Create new worktree
 aw issue [id]                  # Work on an issue (GitHub #123, GitLab #456, JIRA PROJ-123, or Linear TEAM-123)
 aw pr [num]                    # Review a GitHub PR or GitLab MR
-aw list                        # List existing worktrees with session status
-aw sessions                    # View and manage active tmux sessions
+aw list                        # List existing worktrees
 aw settings                    # Configure per-repo settings
 aw doctor                      # Run repository diagnostics (check for lock files, etc.)
 aw help                        # Show help
@@ -204,26 +201,7 @@ aw list
 Shows all worktrees with:
 - Age indicators (green: recent, yellow: few days, red: stale)
 - Merged PR/issue detection (GitHub and JIRA)
-- Tmux session status for each worktree (running, paused, idle, failed)
 - Cleanup prompts for merged, resolved, or stale worktrees
-
-### Manage Tmux Sessions
-
-```bash
-aw sessions
-```
-
-View and interact with all active tmux sessions for worktrees:
-- **Status indicators**: 🟢 running, ⏸️ paused, 💤 idle, ⚠️ needs attention, 🔴 failed
-- **Session details**: Branch name, age, window count, dependency status
-- **Interactive actions**: Attach to a session, pause, resume, or inspect details
-
-**Session Status Meanings:**
-- **Running** (🟢): Session is active and accessible
-- **Paused** (⏸️): Session exists but marked as inactive
-- **Idle** (💤): Session hasn't been accessed recently (default: 2 hours)
-- **Failed** (🔴): Session encountered an error or tmux session was terminated
-- **Needs Attention** (⚠️): Session requires user intervention
 
 ## Configuration
 
@@ -254,16 +232,9 @@ git config auto-worktree.ai-tool claude         # claude, codex, gemini, jules, 
 git config auto-worktree.issue-autoselect true  # true/false
 git config auto-worktree.pr-autoselect true     # true/false
 
-# Tmux session management configuration
-git config auto-worktree.tmux-enabled true                 # Enable tmux (default: true)
-git config auto-worktree.tmux-auto-install true            # Auto-install deps (default: true)
-git config auto-worktree.tmux-layout tiled                 # Pane layout (default: tiled)
-git config auto-worktree.tmux-window-count 1               # Initial windows (default: 1)
-git config auto-worktree.tmux-idle-threshold 120           # Minutes before idle (default: 120)
-git config auto-worktree.tmux-log-commands true            # Log commands (default: true)
 ```
 
-Different repositories can use different issue providers and tmux configurations.
+Different repositories can use different issue providers and AI tool configurations.
 
 ## How It Works
 
@@ -272,13 +243,6 @@ Different repositories can use different issue providers and tmux configurations
 2. Each worktree is a full copy of your repo on its own branch
 3. Claude Code launches with `--dangerously-skip-permissions` for uninterrupted work
 4. When done, use `list` to clean up merged worktrees and branches
-
-### Tmux Session Management
-1. **Session Metadata** is stored in `~/.auto-worktree/sessions/` with persistent state
-2. **Auto-Detection** of project type and automatic dependency installation (npm, pip, cargo, etc.)
-3. **Status Tracking** monitors session activity and automatically marks idle sessions
-4. **Session Lifecycle** handles creation, pause, resume, and cleanup of sessions
-5. **Atomic Operations** ensure metadata consistency even during concurrent access
 
 ## Example Workflows
 
@@ -358,7 +322,7 @@ This project uses [ShellCheck](https://www.shellcheck.net/) to validate shell sc
 To validate all shell scripts in the repository:
 
 ```bash
-scripts/shellcheck/validate_shell_scripts.sh
+ci/validate.sh
 ```
 
 This will check all `.sh` files and report any issues found.
@@ -368,7 +332,7 @@ This will check all `.sh` files and report any issues found.
 Install the pre-commit hook to automatically validate shell scripts before each commit:
 
 ```bash
-scripts/shellcheck/install_pre_commit_hook.sh
+ci/install_pre_commit_hook.sh
 ```
 
 The hook will run ShellCheck on staged `.sh` files and prevent commits if issues are found. To bypass the hook for a single commit (not recommended):
