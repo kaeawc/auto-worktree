@@ -384,14 +384,14 @@ _aw_pr() {
       _disable_pr_autoselect
       gum style --foreground 3 "Auto-select disabled. You can re-enable it from the bottom of the PR list."
       # Recursively call to show the updated list
-      _aw_pr
+      _aw_pr "$@"
       return $?
 
     elif [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select next PR" ]]; then
       _enable_pr_autoselect
       gum style --foreground 2 "Auto-select re-enabled!"
       # Recursively call to show the updated list
-      _aw_pr
+      _aw_pr "$@"
       return $?
 
     else

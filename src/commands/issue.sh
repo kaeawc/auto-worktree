@@ -178,14 +178,14 @@ _aw_issue() {
       _disable_autoselect
       gum style --foreground 3 "Auto-select disabled. You can re-enable it from the bottom of the issue list."
       # Recursively call to show the updated list
-      _aw_issue
+      _aw_issue "$@"
       return $?
 
     elif [[ "$provider" == "github" ]] && [[ "$selection" == "⚡ Auto select next issue" ]]; then
       _enable_autoselect
       gum style --foreground 2 "Auto-select re-enabled!"
       # Recursively call to show the updated list
-      _aw_issue
+      _aw_issue "$@"
       return $?
 
     else
