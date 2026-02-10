@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
+# Run shellcheck on all source files and the built dist/aw.sh
 
-# Exit on error
 set -e
 
 # Check if shellcheck is installed
@@ -18,7 +18,7 @@ fi
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 # Start the timer
-start_time=$(bash "$repo_root/scripts/utils/get_timestamp.sh")
+start_time=$(bash "$repo_root/ci/get_timestamp.sh")
 
 # Determine number of parallel jobs
 if command -v nproc &>/dev/null; then
@@ -35,7 +35,7 @@ errors=$(git ls-files --cached --others --exclude-standard -z |
   xargs -0 -n 1 -P "$parallel_jobs" bash -c 'shellcheck "$0"' 2>&1) || true
 
 # Calculate total elapsed time
-end_time=$(bash "$repo_root/scripts/utils/get_timestamp.sh")
+end_time=$(bash "$repo_root/ci/get_timestamp.sh")
 total_elapsed=$((end_time - start_time))
 
 # Check and report errors

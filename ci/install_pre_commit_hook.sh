@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Install the shellcheck pre-commit hook
-# This script creates a symlink from .git/hooks/pre-commit to scripts/shellcheck/pre-commit
+# This script creates a symlink from .git/hooks/pre-commit to ci/pre-commit
 # Works with both regular repositories and git worktrees
 #
 
@@ -14,7 +14,7 @@ repo_root=$(git rev-parse --show-toplevel)
 git_common_dir=$(git rev-parse --git-common-dir)
 
 # Define paths
-hook_source="$repo_root/scripts/shellcheck/pre-commit"
+hook_source="$repo_root/ci/pre-commit"
 hook_target="$git_common_dir/hooks/pre-commit"
 
 # Create hooks directory if it doesn't exist

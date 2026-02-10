@@ -4,7 +4,7 @@
 # This hook runs shellcheck on all staged .sh files before allowing a commit
 #
 # To install this hook, run from the repository root:
-#   ln -s ../../scripts/shellcheck/pre-commit .git/hooks/pre-commit
+#   bash ci/install_pre_commit_hook.sh
 #
 # To bypass this hook for a single commit (not recommended):
 #   git commit --no-verify

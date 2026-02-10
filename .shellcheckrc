@@ -102,7 +102,7 @@ disable=SC1091
 #
 # To re-enable a check after fixing issues:
 # 1. Remove or comment out the corresponding disable= line
-# 2. Test with: scripts/shellcheck/validate_shell_scripts.sh
+# 2. Test with: ci/validate.sh
 # 3. Fix any new issues that appear
 # 4. Commit the fixes and updated .shellcheckrc
 #

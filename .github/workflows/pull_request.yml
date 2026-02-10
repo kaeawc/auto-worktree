@@ -24,4 +24,4 @@ jobs:
           sudo apt-get install -y shellcheck
 
       - name: Run ShellCheck validation
-        run: scripts/shellcheck/validate_shell_scripts.sh
+        run: ci/validate.sh

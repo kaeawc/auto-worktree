@@ -322,7 +322,7 @@ This project uses [ShellCheck](https://www.shellcheck.net/) to validate shell sc
 To validate all shell scripts in the repository:
 
 ```bash
-scripts/shellcheck/validate_shell_scripts.sh
+ci/validate.sh
 ```
 
 This will check all `.sh` files and report any issues found.
@@ -332,7 +332,7 @@ This will check all `.sh` files and report any issues found.
 Install the pre-commit hook to automatically validate shell scripts before each commit:
 
 ```bash
-scripts/shellcheck/install_pre_commit_hook.sh
+ci/install_pre_commit_hook.sh
 ```
 
 The hook will run ShellCheck on staged `.sh` files and prevent commits if issues are found. To bypass the hook for a single commit (not recommended):
