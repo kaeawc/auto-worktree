@@ -25,6 +25,7 @@ _aw_cleanup_interactive() {
   local -a wt_paths=()
   local -a wt_branches=()
   local -a wt_warnings=()
+  local -a wt_dirty=()
 
   while IFS= read -r wt_path; do
     [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
@@ -43,12 +44,23 @@ _aw_cleanup_interactive() {
       commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -print0 2>/dev/null | while IFS= read -r -d '' file; do _aw_get_file_mtime "$file"; done | sort -rn | head -1)
     fi
 
+    # Check for dirty git state (unstaged or uncommitted changes)
+    local dirty_files=$(git -C "$wt_path" status --porcelain 2>/dev/null)
+    local is_dirty=false
+    if [[ -n "$dirty_files" ]]; then
+      is_dirty=true
+    fi
+
     # Check merge/close status
     local issue_num=$(_aw_extract_issue_number "$wt_branch")
     local status_tag=""
     local warning_msg=""
 
-    if [[ -n "$issue_num" ]] && _aw_check_issue_merged "$issue_num"; then
+    if [[ "$is_dirty" == "true" ]]; then
+      local dirty_count=$(echo "$dirty_files" | grep -c . 2>/dev/null || echo 0)
+      status_tag="[dirty: $dirty_count uncommitted file(s)]"
+      warning_msg="⚠ HAS UNCOMMITTED CHANGES"
+    elif [[ -n "$issue_num" ]] && _aw_check_issue_merged "$issue_num"; then
       status_tag="[merged #$issue_num]"
     elif _aw_check_branch_pr_merged "$wt_branch"; then
       status_tag="[PR merged]"
@@ -91,6 +103,7 @@ _aw_cleanup_interactive() {
     wt_paths+=("$wt_path")
     wt_branches+=("$wt_branch")
     wt_warnings+=("$warning_msg")
+    wt_dirty+=("$is_dirty")
   done <<< "$worktree_list"
 
   if [[ ${#wt_choices[@]} -eq 0 ]]; then
@@ -131,13 +144,19 @@ _aw_cleanup_interactive() {
   echo ""
 
   local has_warnings=false
+  local has_dirty=false
   for idx in "${selected_indices[@]}"; do
     local display="${wt_choices[$idx]}"
     local warning="${wt_warnings[$idx]}"
+    local dirty="${wt_dirty[$idx]}"
 
-    if [[ -n "$warning" ]]; then
+    if [[ "$dirty" == "true" ]]; then
       echo "  • $display"
       echo "    $(gum style --foreground 1 "$warning")"
+      has_dirty=true
+    elif [[ -n "$warning" ]]; then
+      echo "  • $display"
+      echo "    $(gum style --foreground 3 "$warning")"
       has_warnings=true
     else
       echo "  • $display"
@@ -145,9 +164,26 @@ _aw_cleanup_interactive() {
   done
 
   echo ""
+  if [[ "$has_dirty" == "true" ]]; then
+    gum style --foreground 1 "✗ Cannot clean up worktrees with uncommitted changes. Commit or stash your changes first."
+    echo ""
+  fi
   if [[ "$has_warnings" == "true" ]]; then
     gum style --foreground 3 "⚠ Warning: Some worktrees have unpushed commits!"
     echo ""
+  fi
+
+  # Filter out dirty worktrees - build safe indices list
+  local -a clean_indices=()
+  for idx in "${selected_indices[@]}"; do
+    if [[ "${wt_dirty[$idx]}" != "true" ]]; then
+      clean_indices+=($idx)
+    fi
+  done
+
+  if [[ ${#clean_indices[@]} -eq 0 ]]; then
+    gum style --foreground 8 "No worktrees eligible for cleanup (dirty worktrees were skipped)"
+    return 0
   fi
 
   if ! gum confirm "Delete these worktrees and their branches?"; then
@@ -155,8 +191,8 @@ _aw_cleanup_interactive() {
     return 0
   fi
 
-  # Perform cleanup
-  for idx in "${selected_indices[@]}"; do
+  # Perform cleanup (only clean worktrees)
+  for idx in "${clean_indices[@]}"; do
     local c_path="${wt_paths[$idx]}"
     local c_branch="${wt_branches[$idx]}"
 
