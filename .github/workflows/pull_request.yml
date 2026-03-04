@@ -25,3 +25,17 @@ jobs:
 
       - name: Run ShellCheck validation
         run: ci/validate.sh
+
+  run-tests:
+    name: Run Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install bats
+        run: sudo apt-get install -y bats
+
+      - name: Run bats tests
+        run: bats tests/

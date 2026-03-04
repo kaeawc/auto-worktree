@@ -48,7 +48,7 @@ _aw_generate_random_name() {
 }
 
 _aw_sanitize_branch_name() {
-  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed 's/-\+/-/g' | sed 's/^-//;s/-$//'
+  echo "$1" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g' | sed -E 's/-+/-/g' | sed 's/^-//;s/-$//'
 }
 
 _aw_get_file_mtime() {

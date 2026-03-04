@@ -342,6 +342,16 @@ Ask clarifying questions about the intended work if you can think of any."
     printf '\033]0;GitHub Issue #%s - %s\007' "$issue_id" "$title"
   fi
 
+  # For GitHub: register branch-issue link so PRs created from this branch
+  # automatically associate with the issue in the Development section
+  if [[ "$provider" == "github" ]]; then
+    local base_branch
+    base_branch=$(git symbolic-ref --short HEAD 2>/dev/null || echo "main")
+    if gh issue develop "$issue_id" --name "$branch_name" --base "$base_branch" >/dev/null 2>&1; then
+      gum style --foreground 2 "Branch linked to issue #${issue_id}"
+    fi
+  fi
+
   _aw_create_worktree "$branch_name" "$ai_context"
 }
 
