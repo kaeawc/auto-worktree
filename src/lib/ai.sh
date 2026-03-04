@@ -36,8 +36,10 @@ _setup_ai_cmd() {
   local tool_type="$1"
   local default_path="$2"
 
-  local prefix
-  prefix=$(_aw_get_ai_tool_cmd)
+  local raw_cmd
+  raw_cmd=$(_aw_get_ai_tool_cmd)
+  # Support legacy "goog claude" format by taking only the first word as the prefix
+  local prefix="${raw_cmd%% *}"
   local cmd_parts=()
 
   if [[ -n "$prefix" ]] && command -v "$prefix" &>/dev/null; then
