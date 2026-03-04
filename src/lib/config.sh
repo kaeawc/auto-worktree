@@ -365,68 +365,47 @@ _aw_get_ai_tool_cmd() {
 }
 
 _aw_set_ai_tool_cmd() {
-  # Set the corporate AI tool wrapper command
-  # Args: $1 = command (e.g. "goog claude"), $2 = scope (--local or --global, default: --local)
+  # Set the corporate CLI prefix (e.g. "goog" or "appl")
+  # Args: $1 = prefix (e.g. "goog"), $2 = scope (--local or --global, default: --local)
   local cmd="$1"
   local scope="${2:---local}"
   if [[ -z "$cmd" ]]; then
     git config "$scope" --unset auto-worktree.ai-tool-cmd 2>/dev/null || true
   else
     git config "$scope" auto-worktree.ai-tool-cmd "$cmd"
-    gum style --foreground 2 "✓ Corporate AI command set to: $cmd"
+    gum style --foreground 2 "✓ Corporate CLI prefix set to: $cmd"
   fi
 }
 
 _aw_configure_corporate_wrapper() {
-  # Interactive configuration for corporate AI tool wrappers
-  # (e.g. "goog claude" for Google engineers, "appl codex" for Apple engineers)
+  # Interactive configuration for corporate AI CLI prefix wrappers
+  # (e.g. "goog" for Google engineers, "appl" for Apple engineers)
   echo ""
-  gum style --foreground 6 "Configure Corporate AI Tool Wrapper"
+  gum style --foreground 6 "Configure Corporate CLI Prefix"
   echo ""
-  echo "Some companies provide internal CLI wrappers for AI tools,"
-  echo "e.g. 'goog claude' or 'appl codex'."
+  echo "Some companies provide internal CLI wrappers for AI tools."
+  echo "Enter the prefix (e.g. 'goog' for 'goog claude', 'appl' for 'appl codex')."
   echo ""
 
-  local current_cmd=$(_aw_get_ai_tool_cmd)
-  local cmd
-  cmd=$(gum input \
-    --placeholder "e.g. goog claude, appl codex" \
-    --value "$current_cmd" \
-    --header "Corporate AI tool command (leave empty to clear):")
+  local current_prefix=$(_aw_get_ai_tool_cmd)
+  local prefix
+  prefix=$(gum input \
+    --placeholder "e.g. goog, appl" \
+    --value "$current_prefix" \
+    --header "Corporate CLI prefix wrapper (leave empty to skip/clear):")
 
-  if [[ -z "$cmd" ]]; then
-    if [[ -n "$current_cmd" ]]; then
-      if gum confirm "Clear corporate wrapper command?"; then
+  if [[ -z "$prefix" ]]; then
+    if [[ -n "$current_prefix" ]]; then
+      if gum confirm "Clear corporate prefix wrapper?"; then
         git config --local --unset auto-worktree.ai-tool-cmd 2>/dev/null || true
         git config --global --unset auto-worktree.ai-tool-cmd 2>/dev/null || true
-        gum style --foreground 2 "✓ Corporate AI wrapper cleared"
+        gum style --foreground 2 "✓ Corporate AI prefix cleared"
       else
         gum style --foreground 3 "Cancelled"
       fi
-    else
-      gum style --foreground 3 "Cancelled"
     fi
     return 0
   fi
-
-  # Determine which underlying AI tool this wraps
-  echo ""
-  local type_choice
-  type_choice=$(gum choose --header "Which AI tool does this wrap?" \
-    "Claude Code (Anthropic)" \
-    "Codex CLI (OpenAI)" \
-    "Gemini CLI (Google)" \
-    "Google Jules CLI (Google)" \
-    "Back")
-
-  local tool_type=""
-  case "$type_choice" in
-    "Claude Code (Anthropic)") tool_type="claude" ;;
-    "Codex CLI (OpenAI)") tool_type="codex" ;;
-    "Gemini CLI (Google)") tool_type="gemini" ;;
-    "Google Jules CLI (Google)") tool_type="jules" ;;
-    *) return 0 ;;
-  esac
 
   # Choose scope: project or global
   echo ""
@@ -438,14 +417,12 @@ _aw_configure_corporate_wrapper() {
   local scope="--local"
   [[ "$scope_choice" == "Globally (all projects)" ]] && scope="--global"
 
-  _aw_set_ai_tool_cmd "$cmd" "$scope"
-  git config "$scope" auto-worktree.ai-tool "$tool_type"
+  _aw_set_ai_tool_cmd "$prefix" "$scope"
 
   echo ""
-  gum style --foreground 2 "✓ Corporate wrapper configured:"
-  echo "  Command:  $cmd"
-  echo "  Wraps:    $tool_type"
-  echo "  Scope:    ${scope/--/}"
+  gum style --foreground 2 "✓ Corporate prefix configured:"
+  echo "  Prefix: $prefix"
+  echo "  Scope:  ${scope/--/}"
   echo ""
 }
 

@@ -20,8 +20,7 @@
 #   git config auto-worktree.gitlab-project <GROUP/PROJECT>     # Set default GitLab project path
 #   git config auto-worktree.linear-team <TEAM>                 # Set default Linear team
 #   git config auto-worktree.ai-tool <name>                     # claude|codex|gemini|jules|skip
-#   git config auto-worktree.ai-tool-cmd <cmd>                  # Corporate wrapper command, e.g. "goog claude" or "appl codex"
-#   git config --global auto-worktree.ai-tool-cmd <cmd>         # Same but stored globally for all projects
+#   git config auto-worktree.ai-tool-cmd <prefix>               # Corporate CLI prefix, e.g. "goog" or "appl"
 #   git config auto-worktree.issue-autoselect <bool>            # true/false for AI auto-select
 #   git config auto-worktree.pr-autoselect <bool>               # true/false for AI auto-select
 #   git config auto-worktree.run-hooks <bool>                   # true/false to enable/disable git hooks (default: true)

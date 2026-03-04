@@ -36,20 +36,15 @@ _setup_ai_cmd() {
   local tool_type="$1"
   local default_path="$2"
 
-  # Check for a corporate wrapper command override
-  local custom_cmd
-  custom_cmd=$(_aw_get_ai_tool_cmd)
+  local prefix
+  prefix=$(_aw_get_ai_tool_cmd)
   local cmd_parts=()
 
-  if [[ -n "$custom_cmd" ]]; then
-    local base_cmd="${custom_cmd%% *}"
-    if command -v "$base_cmd" &>/dev/null; then
-      read -ra cmd_parts <<< "$custom_cmd"
-    fi
-  fi
-
-  # Fall back to auto-detected path if no valid override
-  if [[ ${#cmd_parts[@]} -eq 0 ]]; then
+  if [[ -n "$prefix" ]] && command -v "$prefix" &>/dev/null; then
+    local tool_bin
+    tool_bin=$(basename "$default_path")
+    cmd_parts=("$prefix" "$tool_bin")
+  else
     cmd_parts=("$default_path")
   fi
 
@@ -502,6 +497,9 @@ _resolve_ai_command() {
       esac
       echo ""
     fi
+
+    echo ""
+    _aw_configure_corporate_wrapper
 
     return 0
   fi
