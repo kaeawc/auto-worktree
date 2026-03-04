@@ -60,7 +60,7 @@ _aw_show_settings_summary() {
   local pr_autoselect=$(_aw_get_pr_autoselect)
 
   local ai_cmd_line=""
-  [[ -n "$ai_tool_cmd" ]] && ai_cmd_line="Corporate AI command: $ai_tool_cmd"
+  [[ -n "$ai_tool_cmd" ]] && ai_cmd_line="AI prefix wrapper: $ai_tool_cmd"
 
   if [[ -n "$ai_cmd_line" ]]; then
     gum style --border rounded --padding "0 1" --border-foreground 4 \
@@ -133,8 +133,7 @@ _aw_show_settings_warnings() {
   local ai_tool_cmd=$(_aw_get_ai_tool_cmd)
 
   if [[ -n "$ai_tool_cmd" ]]; then
-    local base_cmd="${ai_tool_cmd%% *}"
-    command -v "$base_cmd" &>/dev/null || warnings+=("Corporate AI command '$ai_tool_cmd' not found (base command '$base_cmd' is not in PATH).")
+    command -v "$ai_tool_cmd" &>/dev/null || warnings+=("AI prefix wrapper '$ai_tool_cmd' not found in PATH.")
   elif [[ -n "$ai_pref" ]] && [[ "$ai_pref" != "skip" ]]; then
     case "$ai_pref" in
       claude)
@@ -220,7 +219,6 @@ _aw_settings_ai_tool() {
       "Gemini CLI" \
       "Google Jules CLI" \
       "Skip AI tool" \
-      "Corporate wrapper / Custom command" \
       "Back")
 
     case "$choice" in
@@ -231,25 +229,26 @@ _aw_settings_ai_tool() {
       "Claude Code")
         _save_ai_preference "claude"
         gum style --foreground 2 "✓ AI tool preference set to Claude Code"
+        _aw_configure_corporate_wrapper
         ;;
       "Codex CLI")
         _save_ai_preference "codex"
         gum style --foreground 2 "✓ AI tool preference set to Codex CLI"
+        _aw_configure_corporate_wrapper
         ;;
       "Gemini CLI")
         _save_ai_preference "gemini"
         gum style --foreground 2 "✓ AI tool preference set to Gemini CLI"
+        _aw_configure_corporate_wrapper
         ;;
       "Google Jules CLI")
         _save_ai_preference "jules"
         gum style --foreground 2 "✓ AI tool preference set to Google Jules CLI"
+        _aw_configure_corporate_wrapper
         ;;
       "Skip AI tool")
         _save_ai_preference "skip"
         gum style --foreground 2 "✓ AI tool preference set to skip"
-        ;;
-      "Corporate wrapper / Custom command")
-        _aw_configure_corporate_wrapper
         ;;
       *) return 0 ;;
     esac
