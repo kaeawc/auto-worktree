@@ -55,20 +55,39 @@ _aw_show_settings_summary() {
   local linear_team=$(_aw_get_linear_team)
   local ai_pref=$(_load_ai_preference)
   local ai_label=$(_aw_ai_preference_label "$ai_pref")
+  local ai_tool_cmd=$(_aw_get_ai_tool_cmd)
   local issue_autoselect=$(_aw_get_issue_autoselect)
   local pr_autoselect=$(_aw_get_pr_autoselect)
 
-  gum style --border rounded --padding "0 1" --border-foreground 4 \
-    "Settings Summary" \
-    "Issue provider: $provider_label" \
-    "JIRA server: ${jira_server:-(unset)}" \
-    "JIRA project: ${jira_project:-(unset)}" \
-    "GitLab server: ${gitlab_server:-(unset)}" \
-    "GitLab project: ${gitlab_project:-(unset)}" \
-    "Linear team: ${linear_team:-(unset)}" \
-    "AI tool preference: $ai_label" \
-    "Issue auto-select: $(_aw_bool_label "$issue_autoselect")" \
-    "PR auto-select: $(_aw_bool_label "$pr_autoselect")"
+  local ai_cmd_line=""
+  [[ -n "$ai_tool_cmd" ]] && ai_cmd_line="Corporate AI command: $ai_tool_cmd"
+
+  if [[ -n "$ai_cmd_line" ]]; then
+    gum style --border rounded --padding "0 1" --border-foreground 4 \
+      "Settings Summary" \
+      "Issue provider: $provider_label" \
+      "JIRA server: ${jira_server:-(unset)}" \
+      "JIRA project: ${jira_project:-(unset)}" \
+      "GitLab server: ${gitlab_server:-(unset)}" \
+      "GitLab project: ${gitlab_project:-(unset)}" \
+      "Linear team: ${linear_team:-(unset)}" \
+      "AI tool preference: $ai_label" \
+      "$ai_cmd_line" \
+      "Issue auto-select: $(_aw_bool_label "$issue_autoselect")" \
+      "PR auto-select: $(_aw_bool_label "$pr_autoselect")"
+  else
+    gum style --border rounded --padding "0 1" --border-foreground 4 \
+      "Settings Summary" \
+      "Issue provider: $provider_label" \
+      "JIRA server: ${jira_server:-(unset)}" \
+      "JIRA project: ${jira_project:-(unset)}" \
+      "GitLab server: ${gitlab_server:-(unset)}" \
+      "GitLab project: ${gitlab_project:-(unset)}" \
+      "Linear team: ${linear_team:-(unset)}" \
+      "AI tool preference: $ai_label" \
+      "Issue auto-select: $(_aw_bool_label "$issue_autoselect")" \
+      "PR auto-select: $(_aw_bool_label "$pr_autoselect")"
+  fi
 }
 
 _aw_show_settings_warnings() {
@@ -111,7 +130,12 @@ _aw_show_settings_warnings() {
   fi
 
   local ai_pref=$(_load_ai_preference)
-  if [[ -n "$ai_pref" ]] && [[ "$ai_pref" != "skip" ]]; then
+  local ai_tool_cmd=$(_aw_get_ai_tool_cmd)
+
+  if [[ -n "$ai_tool_cmd" ]]; then
+    local base_cmd="${ai_tool_cmd%% *}"
+    command -v "$base_cmd" &>/dev/null || warnings+=("Corporate AI command '$ai_tool_cmd' not found (base command '$base_cmd' is not in PATH).")
+  elif [[ -n "$ai_pref" ]] && [[ "$ai_pref" != "skip" ]]; then
     case "$ai_pref" in
       claude)
         command -v claude &> /dev/null || warnings+=("AI preference set to Claude Code, but it is not installed.")
@@ -184,14 +208,19 @@ _aw_settings_ai_tool() {
   while true; do
     local current_pref=$(_load_ai_preference)
     local current_label=$(_aw_ai_preference_label "$current_pref")
+    local current_cmd=$(_aw_get_ai_tool_cmd)
+    local header_text="AI tool preference (current: $current_label)"
+    [[ -n "$current_cmd" ]] && header_text="AI tool preference (current: $current_label, cmd: $current_cmd)"
 
-    local choice=$(gum choose --header "AI tool preference (current: $current_label)" \
+    local choice
+    choice=$(gum choose --header "$header_text" \
       "Auto (prompt when needed)" \
       "Claude Code" \
       "Codex CLI" \
       "Gemini CLI" \
       "Google Jules CLI" \
       "Skip AI tool" \
+      "Corporate wrapper / Custom command" \
       "Back")
 
     case "$choice" in
@@ -218,6 +247,9 @@ _aw_settings_ai_tool() {
       "Skip AI tool")
         _save_ai_preference "skip"
         gum style --foreground 2 "✓ AI tool preference set to skip"
+        ;;
+      "Corporate wrapper / Custom command")
+        _aw_configure_corporate_wrapper
         ;;
       *) return 0 ;;
     esac
@@ -274,6 +306,7 @@ _aw_settings_reset() {
 
   _aw_clear_issue_provider_settings
   git config --unset auto-worktree.ai-tool 2>/dev/null
+  git config --unset auto-worktree.ai-tool-cmd 2>/dev/null
   git config --unset auto-worktree.issue-autoselect 2>/dev/null
   git config --unset auto-worktree.pr-autoselect 2>/dev/null
   gum style --foreground 2 "✓ All settings reset"
