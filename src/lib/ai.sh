@@ -18,14 +18,63 @@ _load_ai_preference() {
   git config --get auto-worktree.ai-tool 2>/dev/null || echo ""
 }
 
-# Save AI tool preference (per-repository git config)
+# Save AI tool preference
+# Args: $1 = tool name, $2 = scope (--local or --global, default: --local)
 _save_ai_preference() {
   local tool="$1"
+  local scope="${2:---local}"
   if [[ -z "$tool" ]]; then
-    git config --unset auto-worktree.ai-tool 2>/dev/null
+    git config "$scope" --unset auto-worktree.ai-tool 2>/dev/null
   else
-    git config auto-worktree.ai-tool "$tool"
+    git config "$scope" auto-worktree.ai-tool "$tool"
   fi
+}
+
+# Build AI_CMD, AI_CMD_NAME, and AI_RESUME_CMD for a given tool type and path.
+# Applies corporate wrapper override from auto-worktree.ai-tool-cmd if configured.
+_setup_ai_cmd() {
+  local tool_type="$1"
+  local default_path="$2"
+
+  # Check for a corporate wrapper command override
+  local custom_cmd
+  custom_cmd=$(_aw_get_ai_tool_cmd)
+  local cmd_parts=()
+
+  if [[ -n "$custom_cmd" ]]; then
+    local base_cmd="${custom_cmd%% *}"
+    if command -v "$base_cmd" &>/dev/null; then
+      read -ra cmd_parts <<< "$custom_cmd"
+    fi
+  fi
+
+  # Fall back to auto-detected path if no valid override
+  if [[ ${#cmd_parts[@]} -eq 0 ]]; then
+    cmd_parts=("$default_path")
+  fi
+
+  case "$tool_type" in
+    claude)
+      AI_CMD=("${cmd_parts[@]}" --dangerously-skip-permissions)
+      AI_CMD_NAME="Claude Code"
+      AI_RESUME_CMD=("${cmd_parts[@]}" --dangerously-skip-permissions --continue)
+      ;;
+    codex)
+      AI_CMD=("${cmd_parts[@]}" --yolo)
+      AI_CMD_NAME="Codex"
+      AI_RESUME_CMD=("${cmd_parts[@]}" resume --last)
+      ;;
+    gemini)
+      AI_CMD=("${cmd_parts[@]}" --yolo)
+      AI_CMD_NAME="Gemini CLI"
+      AI_RESUME_CMD=("${cmd_parts[@]}" --resume)
+      ;;
+    jules)
+      AI_CMD=("${cmd_parts[@]}")
+      AI_CMD_NAME="Google Jules CLI"
+      AI_RESUME_CMD=("${cmd_parts[@]}")
+      ;;
+  esac
 }
 
 _aw_get_issue_autoselect() {
@@ -348,33 +397,25 @@ _resolve_ai_command() {
     case "$saved_pref" in
       claude)
         if [[ "$claude_available" == true ]]; then
-          AI_CMD=("$claude_path" --dangerously-skip-permissions)
-          AI_CMD_NAME="Claude Code"
-          AI_RESUME_CMD=("$claude_path" --dangerously-skip-permissions --continue)
+          _setup_ai_cmd claude "$claude_path"
           return 0
         fi
         ;;
       codex)
         if [[ "$codex_available" == true ]]; then
-          AI_CMD=("$codex_path" --yolo)
-          AI_CMD_NAME="Codex"
-          AI_RESUME_CMD=("$codex_path" resume --last)
+          _setup_ai_cmd codex "$codex_path"
           return 0
         fi
         ;;
       gemini)
         if [[ "$gemini_available" == true ]]; then
-          AI_CMD=("$gemini_path" --yolo)
-          AI_CMD_NAME="Gemini CLI"
-          AI_RESUME_CMD=("$gemini_path" --resume)
+          _setup_ai_cmd gemini "$gemini_path"
           return 0
         fi
         ;;
       jules)
         if [[ "$jules_available" == true ]]; then
-          AI_CMD=("$jules_path")
-          AI_CMD_NAME="Google Jules CLI"
-          AI_RESUME_CMD=("$jules_path")
+          _setup_ai_cmd jules "$jules_path"
           return 0
         fi
         ;;
@@ -413,24 +454,16 @@ _resolve_ai_command() {
 
     case "$choice" in
       "Claude Code (Anthropic)")
-        AI_CMD=("$claude_path" --dangerously-skip-permissions)
-        AI_CMD_NAME="Claude Code"
-        AI_RESUME_CMD=("$claude_path" --dangerously-skip-permissions --continue)
+        _setup_ai_cmd claude "$claude_path"
         ;;
       "Codex CLI (OpenAI)")
-        AI_CMD=("$codex_path" --yolo)
-        AI_CMD_NAME="Codex"
-        AI_RESUME_CMD=("$codex_path" resume --last)
+        _setup_ai_cmd codex "$codex_path"
         ;;
       "Gemini CLI (Google)")
-        AI_CMD=("$gemini_path" --yolo)
-        AI_CMD_NAME="Gemini CLI"
-        AI_RESUME_CMD=("$gemini_path" --resume)
+        _setup_ai_cmd gemini "$gemini_path"
         ;;
       "Google Jules CLI (Google)")
-        AI_CMD=("$jules_path")
-        AI_CMD_NAME="Google Jules CLI"
-        AI_RESUME_CMD=("$jules_path")
+        _setup_ai_cmd jules "$jules_path"
         ;;
       "Skip - don't use an AI tool")
         AI_CMD=(skip)
@@ -475,30 +508,22 @@ _resolve_ai_command() {
 
   # Only one tool available - use it
   if [[ "$claude_available" == true ]]; then
-    AI_CMD=("$claude_path" --dangerously-skip-permissions)
-    AI_CMD_NAME="Claude Code"
-    AI_RESUME_CMD=("$claude_path" --dangerously-skip-permissions --continue)
+    _setup_ai_cmd claude "$claude_path"
     return 0
   fi
 
   if [[ "$codex_available" == true ]]; then
-    AI_CMD=("$codex_path" --yolo)
-    AI_CMD_NAME="Codex"
-    AI_RESUME_CMD=("$codex_path" resume --last)
+    _setup_ai_cmd codex "$codex_path"
     return 0
   fi
 
   if [[ "$gemini_available" == true ]]; then
-    AI_CMD=("$gemini_path" --yolo)
-    AI_CMD_NAME="Gemini CLI"
-    AI_RESUME_CMD=("$gemini_path" --resume)
+    _setup_ai_cmd gemini "$gemini_path"
     return 0
   fi
 
   if [[ "$jules_available" == true ]]; then
-    AI_CMD=("$jules_path")
-    AI_CMD_NAME="Google Jules CLI"
-    AI_RESUME_CMD=("$jules_path")
+    _setup_ai_cmd jules "$jules_path"
     return 0
   fi
 
