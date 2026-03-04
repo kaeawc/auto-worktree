@@ -35,6 +35,11 @@ _aw_cleanup_interactive() {
     local commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
 
     if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+      # Try branch creation date from reflog (when the branch was first checked out/created)
+      commit_timestamp=$(git -C "$wt_path" reflog show --format=%ct "$wt_branch" 2>/dev/null | tail -1)
+    fi
+
+    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
       commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -print0 2>/dev/null | while IFS= read -r -d '' file; do _aw_get_file_mtime "$file"; done | sort -rn | head -1)
     fi
 
