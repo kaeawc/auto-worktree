@@ -248,3 +248,14 @@ _aw_count_worktrees() {
   # Usage: _aw_count_worktrees "$worktree_list"
   echo "$1" | grep -c . 2>/dev/null || echo 0
 }
+
+_aw_extract_id_from_selection() {
+  # Extract the numeric or key ID from a selection string produced by gum filter/choose.
+  # Handles formats like:
+  #   "#123 | Title..."        -> "123"
+  #   "● #123 | Title..."     -> "123"
+  #   "KEY-456 | Title..."    -> "KEY-456"
+  #   "● KEY-456 | Title..."  -> "KEY-456"
+  # Usage: _aw_extract_id_from_selection "$selection"
+  echo "$1" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' '
+}

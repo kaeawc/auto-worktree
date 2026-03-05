@@ -71,13 +71,12 @@ _aw_issue() {
     worktree_list=$(_aw_get_worktree_list)
     if [[ -n "$worktree_list" ]]; then
       while IFS= read -r wt_path; do
-        if [[ -d "$wt_path" ]]; then
-          local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-          if [[ -n "$wt_branch" ]]; then
-            local wt_issue=$(_aw_extract_issue_id_from_branch "$wt_branch" "$provider")
-            if [[ -n "$wt_issue" ]]; then
-              active_issues+=("$wt_issue")
-            fi
+        _aw_validate_worktree_path "$wt_path" || continue
+        local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        if [[ -n "$wt_branch" ]]; then
+          local wt_issue=$(_aw_extract_issue_id_from_branch "$wt_branch" "$provider")
+          if [[ -n "$wt_issue" ]]; then
+            active_issues+=("$wt_issue")
           fi
         fi
       done <<< "$worktree_list"
@@ -88,7 +87,7 @@ _aw_issue() {
     while IFS= read -r issue_line; do
       if [[ -n "$issue_line" ]]; then
         # Extract issue ID from the line
-        local line_issue=$(echo "$issue_line" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+        local line_issue=$(_aw_extract_id_from_selection "$issue_line")
         # Check if this issue has an active worktree
         local is_active=false
         for active in "${active_issues[@]}"; do
@@ -158,7 +157,7 @@ _aw_issue() {
         return $AW_EXIT_CANCELLED
       fi
 
-      issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+      issue_id=$(_aw_extract_id_from_selection "$selection")
 
     elif [[ ("$provider" == "github" || "$provider" == "linear") ]] && [[ "$selection" == "🚫 Do not show me auto select again" ]]; then
       _disable_autoselect
@@ -176,7 +175,7 @@ _aw_issue() {
 
     else
       # Normal issue selection (works for both GitHub and JIRA)
-      issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+      issue_id=$(_aw_extract_id_from_selection "$selection")
     fi
   fi
 
