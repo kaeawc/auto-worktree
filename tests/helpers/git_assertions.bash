@@ -8,13 +8,25 @@
 #     assert_worktree_exists "/path/to/worktree"
 #   }
 
+# Portable fail — works without bats-support (which is not always installed).
+# Only defines fail if bats-core hasn't already provided it.
+if ! declare -f fail > /dev/null 2>&1; then
+  fail() {
+    echo "# FAIL: $*" >&2
+    return 1
+  }
+fi
+
 # Assert that a git worktree exists at the given path.
 #
 # Usage: assert_worktree_exists <path>
 assert_worktree_exists() {
   local path="$1"
-  git worktree list --porcelain | grep -q "^worktree $path$" \
-    || fail "Expected worktree to exist at: $path"
+  # Resolve the path in case caller used a symlinked path (macOS /var -> /private/var)
+  local resolved_path
+  resolved_path="$(cd "$path" && pwd -P)" 2>/dev/null || resolved_path="$path"
+  git worktree list --porcelain | grep -q "^worktree $resolved_path$" \
+    || fail "Expected worktree to exist at: $path (resolved: $resolved_path)"
 }
 
 # Assert that a git branch exists.
@@ -31,7 +43,9 @@ assert_branch_exists() {
 # Usage: assert_no_worktree <path>
 assert_no_worktree() {
   local path="$1"
-  if git worktree list --porcelain | grep -q "^worktree $path$"; then
+  local resolved_path
+  resolved_path="$(cd "$path" && pwd -P)" 2>/dev/null || resolved_path="$path"
+  if git worktree list --porcelain | grep -q "^worktree $resolved_path$"; then
     fail "Expected no worktree at: $path"
   fi
 }

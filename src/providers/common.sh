@@ -28,7 +28,7 @@ _aw_extract_jira_key() {
   # work/PROJ-123-description, PROJ-456-fix-something
   # JIRA keys are typically PROJECT-NUMBER format
   local branch="$1"
-  echo "$branch" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1
+  echo "$branch" | grep -oE '[A-Z][A-Z0-9]*-[0-9]+' | head -1
 }
 
 _aw_extract_linear_key() {
@@ -36,7 +36,7 @@ _aw_extract_linear_key() {
   # work/TEAM-123-description, TEAM-456-fix-something
   # Linear keys are typically TEAM-NUMBER format (similar to JIRA)
   local branch="$1"
-  echo "$branch" | grep -oE '[A-Z][A-Z0-9]+-[0-9]+' | head -1
+  echo "$branch" | grep -oE '[A-Z][A-Z0-9]*-[0-9]+' | head -1
 }
 
 _aw_extract_issue_id_from_branch() {

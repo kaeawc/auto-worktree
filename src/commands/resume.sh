@@ -46,15 +46,8 @@ _aw_resume() {
   echo ""
 
   # Create selection string from displays
-  local selection_list=""
-  local i=1
-  while [[ $i -le ${#worktree_displays[@]} ]]; do
-    selection_list+="${worktree_displays[$i]}"
-    if [[ $i -lt ${#worktree_displays[@]} ]]; then
-      selection_list+=$'\n'
-    fi
-    ((i++))
-  done
+  local selection_list
+  selection_list=$(printf '%s\n' "${worktree_displays[@]}")
 
   local selected=$(echo "$selection_list" | gum filter --placeholder "Select worktree to resume...")
 
@@ -65,8 +58,8 @@ _aw_resume() {
 
   # Find the corresponding path
   local selected_path=""
-  local i=1
-  while [[ $i -le ${#worktree_displays[@]} ]]; do
+  local i=0
+  while [[ $i -lt ${#worktree_displays[@]} ]]; do
     if [[ "${worktree_displays[$i]}" == "$selected" ]]; then
       selected_path="${worktree_paths[$i]}"
       break

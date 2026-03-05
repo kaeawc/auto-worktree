@@ -3,8 +3,8 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 
-load '../helpers/setup_git_repo'
-load '../helpers/git_assertions'
+load 'helpers/setup_git_repo'
+load 'helpers/git_assertions'
 
 setup() {
   setup_git_repo

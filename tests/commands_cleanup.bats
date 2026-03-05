@@ -87,8 +87,8 @@ teardown() {
 # ---------------------------------------------------------------------------
 _make_worktree() {
   local branch="$1"
-  local wt_dir="${TEST_REPO_DIR}/../wt-${branch//\//-}"
-  git -C "$TEST_REPO_DIR" worktree add -b "$branch" "$wt_dir" HEAD 2>/dev/null
+  local wt_dir; wt_dir="$(cd "${TEST_REPO_DIR}/.." && pwd -P)/wt-${branch//\//-}"
+  git -C "$TEST_REPO_DIR" worktree add -b "$branch" "$wt_dir" HEAD >/dev/null 2>&1
   echo "$wt_dir"
 }
 

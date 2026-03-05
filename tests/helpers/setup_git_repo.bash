@@ -13,7 +13,12 @@
 #   }
 
 setup_git_repo() {
-  TEST_REPO_DIR="$(mktemp -d "$BATS_TMPDIR/aw-test-XXXXXX")"
+  # BATS_TEST_TMPDIR is unique per test case and auto-cleaned by bats-core 1.5+.
+  # Fall back to BATS_TMPDIR for older versions.
+  local base="${BATS_TEST_TMPDIR:-$BATS_TMPDIR}"
+  TEST_REPO_DIR="$(mktemp -d "$base/aw-test-XXXXXX")"
+  # Resolve symlinks so paths match git's canonical view (macOS /var -> /private/var).
+  TEST_REPO_DIR="$(cd "$TEST_REPO_DIR" && pwd -P)"
   export TEST_REPO_DIR
 
   cd "$TEST_REPO_DIR"

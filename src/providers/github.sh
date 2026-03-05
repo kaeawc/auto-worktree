@@ -35,7 +35,7 @@ _aw_github_list_issues() {
   local project="${1:-}"
 
   gh issue list --limit 100 --state open --json number,title,labels \
-    --template '{{range .}}#{{.number}} | {{.title}}{{if .labels}} |{{range .labels}} [{{.name}}]{{end}}{{end}}{{"\n"}}{{end}}' 2>/dev/null
+    --template '{{range .}}#{{.number}} | {{.title}}{{if .labels}} |{{range .labels}} [{{.name}}]{{end}}{{end}}{{"\n"}}{{end}}' 2>/dev/null || true
 }
 
 _aw_github_get_issue_details() {

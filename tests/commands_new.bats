@@ -9,8 +9,8 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/.." && pwd)"
 
-load '../tests/helpers/setup_git_repo'
-load '../tests/helpers/git_assertions'
+load 'helpers/setup_git_repo'
+load 'helpers/git_assertions'
 
 setup() {
   # Stub external-tool functions before sourcing so libs can load cleanly
