@@ -246,7 +246,8 @@ _aw_validate_worktree_path() {
 _aw_count_worktrees() {
   # Counts lines in a worktree list string.
   # Usage: _aw_count_worktrees "$worktree_list"
-  echo "$1" | grep -c . 2>/dev/null || echo 0
+  [[ -z "$1" ]] && echo 0 && return 0
+  echo "$1" | grep -c .
 }
 
 _aw_extract_id_from_selection() {
