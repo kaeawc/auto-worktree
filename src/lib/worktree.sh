@@ -214,7 +214,9 @@ _aw_remove_worktree_and_branch() {
   local branch_name="${2:-}"
 
   echo ""
-  if ! gum spin --spinner dot --title "Removing $(basename "$worktree_path")..." -- git worktree remove --force "$worktree_path"; then
+  git worktree remove --force "$worktree_path"
+  local remove_exit=$?
+  if [[ $remove_exit -ne 0 ]]; then
     gum style --foreground 1 "Error: Failed to remove worktree: $worktree_path"
     return 1
   fi
@@ -222,7 +224,27 @@ _aw_remove_worktree_and_branch() {
   gum style --foreground 2 "✓ Worktree removed: $(basename "$worktree_path")"
 
   if [[ -n "$branch_name" ]] && git show-ref --verify --quiet "refs/heads/${branch_name}"; then
-    git branch -D "$branch_name" 2>/dev/null
+    if ! git branch -d "$branch_name" 2>/dev/null; then
+      # Branch has unmerged changes; force-delete
+      git branch -D "$branch_name" 2>/dev/null
+    fi
     gum style --foreground 2 "✓ Branch deleted: $branch_name"
   fi
+}
+
+_aw_validate_worktree_path() {
+  # Returns 0 if path is a valid non-main worktree, 1 otherwise.
+  # Usage: _aw_validate_worktree_path wt_path
+  local wt_path="$1"
+
+  [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && return 1
+  [[ ! -d "$wt_path" ]] && return 1
+
+  return 0
+}
+
+_aw_count_worktrees() {
+  # Counts lines in a worktree list string.
+  # Usage: _aw_count_worktrees "$worktree_list"
+  echo "$1" | grep -c . 2>/dev/null || echo 0
 }
