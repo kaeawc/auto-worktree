@@ -12,6 +12,10 @@ _aw_linear_check_completed() {
     return 1
   fi
 
+  if ! command -v linear &>/dev/null; then
+    return 1
+  fi
+
   # Get issue details using Linear CLI
   # The 'linear issue view' command outputs markdown with issue details
   local issue_view=$(linear issue view "$issue_id" 2>/dev/null)
@@ -46,6 +50,10 @@ _aw_linear_check_completed() {
 _aw_linear_list_issues() {
   # List Linear issues
   # Returns formatted issue list similar to GitHub issues
+  if ! command -v linear &>/dev/null; then
+    return 1
+  fi
+
   local team=$(_aw_get_linear_team)
 
   # List issues using Linear CLI
@@ -87,6 +95,10 @@ _aw_linear_get_issue_details() {
   local issue_id="$1"
 
   if [[ -z "$issue_id" ]]; then
+    return 1
+  fi
+
+  if ! command -v linear &>/dev/null; then
     return 1
   fi
 

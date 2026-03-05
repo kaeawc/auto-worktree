@@ -54,7 +54,6 @@ _aw_gitlab_list_issues() {
   # List GitLab issues
   # Returns formatted issue list similar to GitHub issues
   if ! command -v glab &>/dev/null; then
-    gum style --foreground 1 "Error: 'glab' CLI is not installed. Install it from https://gitlab.com/gitlab-org/cli"
     return 1
   fi
 

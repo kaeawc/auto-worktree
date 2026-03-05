@@ -12,6 +12,10 @@ _aw_jira_check_resolved() {
     return 1
   fi
 
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   # Get issue status using JIRA CLI
   local status=$(jira issue view "$jira_key" --plain --columns status 2>/dev/null | tail -1 | awk '{print $NF}')
 
@@ -34,6 +38,10 @@ _aw_jira_check_resolved() {
 _aw_jira_list_issues() {
   # List JIRA issues using JQL
   # Returns formatted issue list similar to GitHub issues
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   local project=$(_aw_get_jira_project)
   local jql="status != Done AND status != Closed AND status != Resolved"
 
@@ -72,6 +80,10 @@ _aw_jira_get_issue_details() {
     return 1
   fi
 
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   # Get issue details in JSON format
   local issue_json=$(jira issue view "$jira_key" --plain --columns summary,description 2>/dev/null)
 
@@ -95,6 +107,10 @@ _aw_jira_get_issue_details() {
 _aw_jira_list_epics() {
   # List open JIRA epics
   # Output format: KEY | Summary | [Status]
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   local project=$(_aw_get_jira_project)
   local jql="type = Epic AND statusCategory != Done"
 
@@ -124,6 +140,10 @@ _aw_jira_list_issues_by_epic() {
   local project=$(_aw_get_jira_project)
 
   if [[ -z "$epic_key" ]]; then
+    return 1
+  fi
+
+  if ! command -v jira &>/dev/null; then
     return 1
   fi
 
