@@ -198,7 +198,10 @@ _aw_settings_issue_provider() {
       "Configure GitLab") _aw_configure_gitlab ;;
       "Configure Linear") _aw_configure_linear ;;
       "Clear issue provider settings") _aw_clear_issue_provider_settings ;;
-      *) return 0 ;;
+      *)
+        [[ -z "$choice" ]] && return $AW_EXIT_CANCELLED
+        return 0
+        ;;
     esac
   done
 }
@@ -243,7 +246,10 @@ _aw_settings_ai_tool() {
         _save_ai_preference "skip"
         gum style --foreground 2 "✓ AI tool preference set to skip"
         ;;
-      *) return 0 ;;
+      *)
+        [[ -z "$choice" ]] && return $AW_EXIT_CANCELLED
+        return 0
+        ;;
     esac
   done
 }
@@ -285,7 +291,10 @@ _aw_settings_autoselect() {
         git config --unset auto-worktree.pr-autoselect 2>/dev/null
         gum style --foreground 2 "✓ Auto-select settings reset to defaults"
         ;;
-      *) return 0 ;;
+      *)
+        [[ -z "$choice" ]] && return $AW_EXIT_CANCELLED
+        return 0
+        ;;
     esac
   done
 }
@@ -325,7 +334,10 @@ _aw_settings_menu() {
       "AI tool preference") _aw_settings_ai_tool ;;
       "Auto-select settings") _aw_settings_autoselect ;;
       "Reset settings") _aw_settings_reset ;;
-      *) return 0 ;;
+      *)
+        [[ -z "$choice" ]] && return $AW_EXIT_CANCELLED
+        return 0
+        ;;
     esac
   done
 }

@@ -104,7 +104,10 @@ _aw_get_config_bool() {
 
 # Args: $1 = config key (without "auto-worktree." prefix), $2 = value (true/false)
 _aw_set_config_bool() {
-  git config "auto-worktree.$1" "$2"
+  if ! git config "auto-worktree.$1" "$2"; then
+    gum style --foreground 1 "Error: Failed to save setting '$1'"
+    return 1
+  fi
 }
 
 _aw_get_issue_autoselect() {
@@ -173,7 +176,7 @@ _ai_select_items() {
 
   # Create a temporary file with the item list
   local temp_items
-  temp_items=$(mktemp)
+  temp_items=$(mktemp 2>/dev/null) || { gum style --foreground 1 "Error: Failed to create temp file"; return 1; }
   trap "rm -f \"$temp_items\"" RETURN
   echo "$items" > "$temp_items"
 

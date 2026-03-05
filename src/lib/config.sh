@@ -30,7 +30,10 @@ _aw_set_config() {
     fi
   fi
 
-  git config "auto-worktree.$key" "$value"
+  if ! git config "auto-worktree.$key" "$value"; then
+    gum style --foreground 1 "Error: Failed to save setting '$key'"
+    return 1
+  fi
 }
 
 # Generic unsetter: _aw_unset_config KEY
@@ -54,7 +57,10 @@ _aw_set_issue_provider() {
     return 1
   fi
 
-  git config auto-worktree.issue-provider "$provider"
+  if ! git config auto-worktree.issue-provider "$provider"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-provider'"
+    return 1
+  fi
   gum style --foreground 2 "✓ Issue provider set to: $provider"
 }
 
@@ -66,7 +72,10 @@ _aw_get_jira_server() {
 _aw_set_jira_server() {
   # Set the JIRA server URL for this repository
   local server="$1"
-  git config auto-worktree.jira-server "$server"
+  if ! git config auto-worktree.jira-server "$server"; then
+    gum style --foreground 1 "Error: Failed to save setting 'jira-server'"
+    return 1
+  fi
   gum style --foreground 2 "✓ JIRA server set to: $server"
 }
 
@@ -78,7 +87,10 @@ _aw_get_jira_project() {
 _aw_set_jira_project() {
   # Set the default JIRA project key for this repository
   local project="$1"
-  git config auto-worktree.jira-project "$project"
+  if ! git config auto-worktree.jira-project "$project"; then
+    gum style --foreground 1 "Error: Failed to save setting 'jira-project'"
+    return 1
+  fi
   gum style --foreground 2 "✓ JIRA project set to: $project"
 }
 
@@ -90,7 +102,10 @@ _aw_get_gitlab_server() {
 _aw_set_gitlab_server() {
   # Set the GitLab server URL for this repository
   local server="$1"
-  git config auto-worktree.gitlab-server "$server"
+  if ! git config auto-worktree.gitlab-server "$server"; then
+    gum style --foreground 1 "Error: Failed to save setting 'gitlab-server'"
+    return 1
+  fi
   gum style --foreground 2 "✓ GitLab server set to: $server"
 }
 
@@ -102,7 +117,10 @@ _aw_get_gitlab_project() {
 _aw_set_gitlab_project() {
   # Set the default GitLab project path for this repository
   local project="$1"
-  git config auto-worktree.gitlab-project "$project"
+  if ! git config auto-worktree.gitlab-project "$project"; then
+    gum style --foreground 1 "Error: Failed to save setting 'gitlab-project'"
+    return 1
+  fi
   gum style --foreground 2 "✓ GitLab project set to: $project"
 }
 
@@ -114,7 +132,10 @@ _aw_get_issue_templates_dir() {
 _aw_set_issue_templates_dir() {
   # Set the issue templates directory for this repository
   local dir="$1"
-  git config auto-worktree.issue-templates-dir "$dir"
+  if ! git config auto-worktree.issue-templates-dir "$dir"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-dir'"
+    return 1
+  fi
   gum style --foreground 2 "✓ Issue templates directory set to: $dir"
 }
 
@@ -127,7 +148,10 @@ _aw_get_issue_templates_disabled() {
 _aw_set_issue_templates_disabled() {
   # Disable issue templates for this repository
   local disabled="$1"  # "true" or "false"
-  git config auto-worktree.issue-templates-disabled "$disabled"
+  if ! git config auto-worktree.issue-templates-disabled "$disabled"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-disabled'"
+    return 1
+  fi
 }
 
 _aw_get_issue_templates_prompt_disabled() {
@@ -139,7 +163,10 @@ _aw_get_issue_templates_prompt_disabled() {
 _aw_set_issue_templates_prompt_disabled() {
   # Set whether to prompt for templates in future
   local disabled="$1"  # "true" or "false"
-  git config auto-worktree.issue-templates-no-prompt "$disabled"
+  if ! git config auto-worktree.issue-templates-no-prompt "$disabled"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-no-prompt'"
+    return 1
+  fi
 }
 
 _aw_get_issue_templates_detected_flag() {
@@ -149,7 +176,10 @@ _aw_get_issue_templates_detected_flag() {
 
 _aw_set_issue_templates_detected_flag() {
   # Set flag that we've notified user about templates
-  git config auto-worktree.issue-templates-detected "true"
+  if ! git config auto-worktree.issue-templates-detected "true"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-detected'"
+    return 1
+  fi
 }
 
 _aw_detect_issue_templates() {
@@ -359,7 +389,10 @@ _aw_get_linear_team() {
 _aw_set_linear_team() {
   # Set the default Linear team key for this repository
   local team="$1"
-  git config auto-worktree.linear-team "$team"
+  if ! git config auto-worktree.linear-team "$team"; then
+    gum style --foreground 1 "Error: Failed to save setting 'linear-team'"
+    return 1
+  fi
   gum style --foreground 2 "✓ Linear team set to: $team"
 }
 
