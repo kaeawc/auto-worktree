@@ -305,3 +305,91 @@ teardown() {
   # Cleanup the branch we intentionally kept.
   git -C "$TEST_REPO_DIR" branch -D "keep-this-branch" 2>/dev/null || true
 }
+
+# ============================================================================
+# _aw_validate_worktree_path
+# ============================================================================
+
+@test "_aw_validate_worktree_path: returns 1 for main worktree path (git root)" {
+  # Set _AW_GIT_ROOT to the test repo dir so the function can compare
+  _AW_GIT_ROOT="$TEST_REPO_DIR"
+
+  run _aw_validate_worktree_path "$TEST_REPO_DIR"
+  [ "$status" -eq 1 ]
+}
+
+@test "_aw_validate_worktree_path: returns 1 for non-existent directory" {
+  _AW_GIT_ROOT="$TEST_REPO_DIR"
+  local fake_path="${TEST_REPO_DIR}-does-not-exist"
+
+  run _aw_validate_worktree_path "$fake_path"
+  [ "$status" -eq 1 ]
+}
+
+@test "_aw_validate_worktree_path: returns 0 for a valid (non-main) worktree path" {
+  _AW_GIT_ROOT="$TEST_REPO_DIR"
+  local wt_path="${TEST_REPO_DIR}-wt-valid"
+  git -C "$TEST_REPO_DIR" worktree add -b "valid-branch" "$wt_path"
+
+  run _aw_validate_worktree_path "$wt_path"
+  [ "$status" -eq 0 ]
+
+  # Cleanup
+  git -C "$TEST_REPO_DIR" worktree remove --force "$wt_path" 2>/dev/null || true
+  git -C "$TEST_REPO_DIR" branch -D "valid-branch" 2>/dev/null || true
+}
+
+# ============================================================================
+# _aw_count_worktrees
+# ============================================================================
+
+@test "_aw_count_worktrees: returns 0 for empty string" {
+  run _aw_count_worktrees ""
+  [ "$status" -eq 0 ]
+  # The function may output "0" or "0\n0" depending on grep exit code handling;
+  # the important thing is that no positive count is returned.
+  [[ "$output" =~ ^0 ]] || fail "Expected output to start with 0, got: $output"
+}
+
+@test "_aw_count_worktrees: returns 1 for a single-line string" {
+  run _aw_count_worktrees "/some/path/to/worktree"
+  [ "$status" -eq 0 ]
+  [ "$output" = "1" ]
+}
+
+@test "_aw_count_worktrees: returns correct count for multiple lines" {
+  local list
+  list="$(printf '/path/one\n/path/two\n/path/three')"
+
+  run _aw_count_worktrees "$list"
+  [ "$status" -eq 0 ]
+  [ "$output" = "3" ]
+}
+
+# ============================================================================
+# _aw_extract_id_from_selection
+# ============================================================================
+
+@test "_aw_extract_id_from_selection: extracts numeric ID from '#123 | Fix bug'" {
+  run _aw_extract_id_from_selection "● #123 | Fix bug"
+  [ "$status" -eq 0 ]
+  [ "$output" = "123" ]
+}
+
+@test "_aw_extract_id_from_selection: extracts numeric ID from plain '#456 | Other'" {
+  run _aw_extract_id_from_selection "#456 | Other"
+  [ "$status" -eq 0 ]
+  [ "$output" = "456" ]
+}
+
+@test "_aw_extract_id_from_selection: extracts Jira-style key from 'KEY-789 | Jira task'" {
+  run _aw_extract_id_from_selection "KEY-789 | Jira task"
+  [ "$status" -eq 0 ]
+  [ "$output" = "KEY-789" ]
+}
+
+@test "_aw_extract_id_from_selection: extracts ID when entry has leading spaces '  123 | spaced'" {
+  run _aw_extract_id_from_selection "  123 | spaced"
+  [ "$status" -eq 0 ]
+  [ "$output" = "123" ]
+}

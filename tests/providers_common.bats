@@ -15,14 +15,21 @@ setup() {
   # Stub _aw_get_issue_provider before sourcing so common.sh can load cleanly
   _aw_get_issue_provider() { echo "github"; }
 
+  # Stub gum so config.sh functions don't require the binary.
+  gum() { return 0; }
+  export -f gum
+
   # Source the pure utility functions under test
   # shellcheck source=../src/lib/utils.sh
   source "${REPO_ROOT}/src/lib/utils.sh"
   # shellcheck source=../src/providers/common.sh
   source "${REPO_ROOT}/src/providers/common.sh"
+  # shellcheck source=../src/lib/config.sh
+  source "${REPO_ROOT}/src/lib/config.sh"
 
   # Set up an isolated git repo for tests that need one
   setup_git_repo
+  cd "$TEST_REPO_DIR"
 }
 
 teardown() {
@@ -191,4 +198,57 @@ teardown() {
   run _aw_format_labels " bug , enhancement "
   [ "$status" -eq 0 ]
   [ "$output" = "[bug][enhancement]" ]
+}
+
+# ===== _aw_get_config / _aw_set_config / _aw_unset_config =====
+
+@test "_aw_get_config: returns empty string for unset key" {
+  run _aw_get_config "some-unset-key-xyz"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_aw_get_config: returns value after setting it" {
+  git config "auto-worktree.test-key" "hello-value"
+
+  run _aw_get_config "test-key"
+  [ "$status" -eq 0 ]
+  [ "$output" = "hello-value" ]
+
+  # Cleanup
+  git config --unset "auto-worktree.test-key" 2>/dev/null || true
+}
+
+@test "_aw_set_config: accepts a valid value from allowed list" {
+  run _aw_set_config "test-provider" "github" "github" "gitlab" "jira"
+  [ "$status" -eq 0 ]
+
+  # Cleanup
+  git config --unset "auto-worktree.test-provider" 2>/dev/null || true
+}
+
+@test "_aw_set_config: rejects an invalid value when allowed values are specified" {
+  run _aw_set_config "test-provider" "invalid-value" "github" "gitlab" "jira"
+  [ "$status" -eq 1 ]
+}
+
+@test "_aw_unset_config: removes a key so subsequent get returns empty" {
+  git config "auto-worktree.remove-me" "some-value"
+
+  # Confirm it is set
+  run _aw_get_config "remove-me"
+  [ "$output" = "some-value" ]
+
+  # Unset it
+  _aw_unset_config "remove-me"
+
+  # Now it should be empty
+  run _aw_get_config "remove-me"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "_aw_unset_config: silently succeeds for a key that was never set" {
+  run _aw_unset_config "never-existed-key-abc"
+  [ "$status" -eq 0 ]
 }
