@@ -449,18 +449,19 @@ _resolve_ai_command() {
 
     local choice=$(gum choose "${options[@]}")
 
+    local chosen_tool="" chosen_path=""
     case "$choice" in
       "Claude Code (Anthropic)")
-        _setup_ai_cmd claude "$claude_path"
+        chosen_tool="claude"; chosen_path="$claude_path"
         ;;
       "Codex CLI (OpenAI)")
-        _setup_ai_cmd codex "$codex_path"
+        chosen_tool="codex"; chosen_path="$codex_path"
         ;;
       "Gemini CLI (Google)")
-        _setup_ai_cmd gemini "$gemini_path"
+        chosen_tool="gemini"; chosen_path="$gemini_path"
         ;;
       "Google Jules CLI (Google)")
-        _setup_ai_cmd jules "$jules_path"
+        chosen_tool="jules"; chosen_path="$jules_path"
         ;;
       "Skip - don't use an AI tool")
         AI_CMD=(skip)
@@ -471,6 +472,8 @@ _resolve_ai_command() {
         return 1
         ;;
     esac
+
+    _setup_ai_cmd "$chosen_tool" "$chosen_path"
 
     # Ask if this choice should be saved
     echo ""
@@ -502,6 +505,8 @@ _resolve_ai_command() {
 
     echo ""
     _aw_configure_corporate_wrapper
+    # Rebuild AI_CMD with the newly saved prefix (if user just configured one)
+    _setup_ai_cmd "$chosen_tool" "$chosen_path"
 
     return 0
   fi
