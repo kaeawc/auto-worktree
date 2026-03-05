@@ -120,13 +120,13 @@ _aw_linear_get_issue_details() {
 
 _aw_linear_list_milestones() {
   # Linear does not support project/milestone listing via CLI
-  gum style --foreground 1 "Linear does not support project/milestone listing via CLI"
+  echo "Linear does not support project/milestone listing via CLI" >&2
   return 1
 }
 
 _aw_linear_list_issues_by_milestone() {
   # Linear does not support filtering issues by project via CLI
-  gum style --foreground 1 "Linear does not support filtering issues by project via CLI"
+  echo "Linear does not support filtering issues by project via CLI" >&2
   return 1
 }
 

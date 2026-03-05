@@ -49,16 +49,18 @@ _aw_jira_list_issues() {
       key = $1
       summary = $2
       labels = $3
-
-      # Format similar to GitHub issue list
-      printf "%s | %s", key, summary
-      if (labels != "" && labels != "∅") {
-        # Split labels and format them
-        gsub(/,/, "][", labels)
-        printf " | [%s]", labels
-      }
-      printf "\n"
-    }'
+      if (labels == "∅") labels = ""
+      printf "%s\t%s\t%s\n", key, summary, labels
+    }' | \
+    while IFS=$'\t' read -r key summary labels; do
+      local formatted_labels
+      formatted_labels=$(_aw_format_labels "$labels")
+      if [[ -n "$formatted_labels" ]]; then
+        echo "${key} | ${summary} | ${formatted_labels}"
+      else
+        echo "${key} | ${summary}"
+      fi
+    done
 }
 
 _aw_jira_get_issue_details() {
@@ -135,14 +137,18 @@ _aw_jira_list_issues_by_epic() {
       key = $1
       summary = $2
       labels = $3
-
-      printf "%s | %s", key, summary
-      if (labels != "" && labels != "∅") {
-        gsub(/,/, "][", labels)
-        printf " | [%s]", labels
-      }
-      printf "\n"
-    }'
+      if (labels == "∅") labels = ""
+      printf "%s\t%s\t%s\n", key, summary, labels
+    }' | \
+    while IFS=$'\t' read -r key summary labels; do
+      local formatted_labels
+      formatted_labels=$(_aw_format_labels "$labels")
+      if [[ -n "$formatted_labels" ]]; then
+        echo "${key} | ${summary} | ${formatted_labels}"
+      else
+        echo "${key} | ${summary}"
+      fi
+    done
 }
 
 # ============================================================================

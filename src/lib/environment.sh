@@ -4,7 +4,15 @@
 # Auto-install project dependencies (npm, pip, cargo, go, etc.)
 # ============================================================================
 _aw_setup_environment() {
-  # Automatically set up the development environment based on detected project files
+  # Automatically set up the development environment based on detected project files.
+  # Accepts an optional --strict flag as the first argument. In strict mode, any
+  # install step failure causes the function to return non-zero immediately. In
+  # non-strict mode (default), failures are reported as warnings and execution continues.
+  local strict=false
+  if [[ "${1:-}" == "--strict" ]]; then
+    strict=true
+    shift
+  fi
   local worktree_path="$1"
 
   if [[ ! -d "$worktree_path" ]]; then
@@ -22,6 +30,7 @@ _aw_setup_environment() {
   local setup_ran=false
 
   # Node.js project
+  # Uses --strict flag: failures return 1 in strict mode, warn and continue otherwise.
   if [[ -f "$worktree_path/package.json" ]]; then
     setup_ran=true
     echo ""
@@ -61,7 +70,12 @@ _aw_setup_environment() {
           if gum spin --spinner dot --title "Running bun install..." -- bun install --cwd "$worktree_path"; then
             gum style --foreground 2 "✓ Dependencies installed (bun)"
           else
-            gum style --foreground 3 "⚠ bun install had issues (continuing anyway)"
+            if $strict; then
+              gum style --foreground 1 "✗ bun install failed"
+              return 1
+            else
+              gum style --foreground 3 "⚠ bun install had issues (continuing anyway)"
+            fi
           fi
         else
           gum style --foreground 3 "⚠ bun not found, skipping dependency installation"
@@ -72,7 +86,12 @@ _aw_setup_environment() {
           if gum spin --spinner dot --title "Running pnpm install..." -- pnpm install --dir "$worktree_path" --silent; then
             gum style --foreground 2 "✓ Dependencies installed (pnpm)"
           else
-            gum style --foreground 3 "⚠ pnpm install had issues (continuing anyway)"
+            if $strict; then
+              gum style --foreground 1 "✗ pnpm install failed"
+              return 1
+            else
+              gum style --foreground 3 "⚠ pnpm install had issues (continuing anyway)"
+            fi
           fi
         else
           gum style --foreground 3 "⚠ pnpm not found, skipping dependency installation"
@@ -83,7 +102,12 @@ _aw_setup_environment() {
           if gum spin --spinner dot --title "Running yarn install..." -- sh -c "cd '$worktree_path' && yarn install --silent"; then
             gum style --foreground 2 "✓ Dependencies installed (yarn)"
           else
-            gum style --foreground 3 "⚠ yarn install had issues (continuing anyway)"
+            if $strict; then
+              gum style --foreground 1 "✗ yarn install failed"
+              return 1
+            else
+              gum style --foreground 3 "⚠ yarn install had issues (continuing anyway)"
+            fi
           fi
         else
           gum style --foreground 3 "⚠ yarn not found, skipping dependency installation"
@@ -94,7 +118,12 @@ _aw_setup_environment() {
           if gum spin --spinner dot --title "Running npm install..." -- npm --prefix "$worktree_path" install --silent; then
             gum style --foreground 2 "✓ Dependencies installed (npm)"
           else
-            gum style --foreground 3 "⚠ npm install had issues (continuing anyway)"
+            if $strict; then
+              gum style --foreground 1 "✗ npm install failed"
+              return 1
+            else
+              gum style --foreground 3 "⚠ npm install had issues (continuing anyway)"
+            fi
           fi
         else
           gum style --foreground 3 "⚠ npm not found, skipping dependency installation"
@@ -104,6 +133,7 @@ _aw_setup_environment() {
   fi
 
   # Python project
+  # Uses --strict flag: failures return 1 in strict mode, warn and continue otherwise.
   if [[ -f "$worktree_path/requirements.txt" ]] || [[ -f "$worktree_path/pyproject.toml" ]]; then
     setup_ran=true
     echo ""
@@ -124,7 +154,12 @@ _aw_setup_environment() {
       if gum spin --spinner dot --title "Running uv sync..." -- sh -c "cd '$worktree_path' && uv sync"; then
         gum style --foreground 2 "✓ Dependencies installed (uv + .venv)"
       else
-        gum style --foreground 3 "⚠ uv sync had issues (continuing anyway)"
+        if $strict; then
+          gum style --foreground 1 "✗ uv sync failed"
+          return 1
+        else
+          gum style --foreground 3 "⚠ uv sync had issues (continuing anyway)"
+        fi
       fi
     elif [[ -f "$worktree_path/pyproject.toml" ]]; then
       gum style --foreground 6 "Detected Python project (pyproject.toml)"
@@ -134,7 +169,12 @@ _aw_setup_environment() {
         if gum spin --spinner dot --title "Running poetry install..." -- poetry -C "$worktree_path" install --quiet; then
           gum style --foreground 2 "✓ Dependencies installed (poetry)"
         else
-          gum style --foreground 3 "⚠ poetry install had issues (continuing anyway)"
+          if $strict; then
+            gum style --foreground 1 "✗ poetry install failed"
+            return 1
+          else
+            gum style --foreground 3 "⚠ poetry install had issues (continuing anyway)"
+          fi
         fi
       elif command -v pip &> /dev/null || command -v pip3 &> /dev/null; then
         # Fall back to pip
@@ -142,7 +182,12 @@ _aw_setup_environment() {
         if gum spin --spinner dot --title "Installing Python dependencies..." -- $pip_cmd install -q -e "$worktree_path"; then
           gum style --foreground 2 "✓ Dependencies installed (pip)"
         else
-          gum style --foreground 3 "⚠ pip install had issues (continuing anyway)"
+          if $strict; then
+            gum style --foreground 1 "✗ pip install failed"
+            return 1
+          else
+            gum style --foreground 3 "⚠ pip install had issues (continuing anyway)"
+          fi
         fi
       else
         gum style --foreground 3 "⚠ No Python package manager found"
@@ -155,7 +200,12 @@ _aw_setup_environment() {
         if gum spin --spinner dot --title "Installing Python dependencies..." -- $pip_cmd install -q -r "$worktree_path/requirements.txt"; then
           gum style --foreground 2 "✓ Dependencies installed (pip)"
         else
-          gum style --foreground 3 "⚠ pip install had issues (continuing anyway)"
+          if $strict; then
+            gum style --foreground 1 "✗ pip install failed"
+            return 1
+          else
+            gum style --foreground 3 "⚠ pip install had issues (continuing anyway)"
+          fi
         fi
       else
         gum style --foreground 3 "⚠ pip not found, skipping dependency installation"
@@ -164,6 +214,7 @@ _aw_setup_environment() {
   fi
 
   # Ruby project
+  # Uses --strict flag: failures return 1 in strict mode, warn and continue otherwise.
   if [[ -f "$worktree_path/Gemfile" ]]; then
     setup_ran=true
     echo ""
@@ -173,7 +224,12 @@ _aw_setup_environment() {
       if gum spin --spinner dot --title "Running bundle install..." -- bundle install --gemfile="$worktree_path/Gemfile" --quiet; then
         gum style --foreground 2 "✓ Dependencies installed"
       else
-        gum style --foreground 3 "⚠ bundle install had issues (continuing anyway)"
+        if $strict; then
+          gum style --foreground 1 "✗ bundle install failed"
+          return 1
+        else
+          gum style --foreground 3 "⚠ bundle install had issues (continuing anyway)"
+        fi
       fi
     else
       gum style --foreground 3 "⚠ bundle not found, skipping dependency installation"
@@ -181,6 +237,7 @@ _aw_setup_environment() {
   fi
 
   # Go project
+  # Uses --strict flag: failures return 1 in strict mode, warn and continue otherwise.
   if [[ -f "$worktree_path/go.mod" ]]; then
     setup_ran=true
     echo ""
@@ -190,7 +247,12 @@ _aw_setup_environment() {
       if gum spin --spinner dot --title "Running go mod download..." -- sh -c "cd '$worktree_path' && go mod download"; then
         gum style --foreground 2 "✓ Dependencies downloaded"
       else
-        gum style --foreground 3 "⚠ go mod download had issues (continuing anyway)"
+        if $strict; then
+          gum style --foreground 1 "✗ go mod download failed"
+          return 1
+        else
+          gum style --foreground 3 "⚠ go mod download had issues (continuing anyway)"
+        fi
       fi
     else
       gum style --foreground 3 "⚠ go not found, skipping dependency installation"
@@ -198,6 +260,7 @@ _aw_setup_environment() {
   fi
 
   # Rust project
+  # Uses --strict flag: failures return 1 in strict mode, warn and continue otherwise.
   if [[ -f "$worktree_path/Cargo.toml" ]]; then
     setup_ran=true
     echo ""
@@ -207,7 +270,12 @@ _aw_setup_environment() {
       if gum spin --spinner dot --title "Running cargo fetch..." -- sh -c "cd '$worktree_path' && cargo fetch --quiet"; then
         gum style --foreground 2 "✓ Dependencies fetched"
       else
-        gum style --foreground 3 "⚠ cargo fetch had issues (continuing anyway)"
+        if $strict; then
+          gum style --foreground 1 "✗ cargo fetch failed"
+          return 1
+        else
+          gum style --foreground 3 "⚠ cargo fetch had issues (continuing anyway)"
+        fi
       fi
     else
       gum style --foreground 3 "⚠ cargo not found, skipping dependency installation"

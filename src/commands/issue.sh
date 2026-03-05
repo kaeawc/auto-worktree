@@ -8,16 +8,8 @@ _aw_issue() {
   _aw_get_repo_info
 
   # Determine issue provider
-  local provider=$(_aw_get_issue_provider)
-
-  # If not configured, prompt user to choose
-  if [[ -z "$provider" ]]; then
-    _aw_prompt_issue_provider || return 1
-    provider=$(_aw_get_issue_provider)
-  fi
-
-  # Check for provider-specific dependencies
-  _aw_check_issue_provider_deps "$provider" || return 1
+  local provider
+  provider=$(_aw_init_issue_provider) || return 1
 
   # Detect if argument is GitHub/GitLab issue number or JIRA key
   local issue_id="${1:-}"
@@ -75,20 +67,14 @@ _aw_issue() {
 
     # Detect which issues have active worktrees
     local active_issues=()
-    local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+    local worktree_list
+    worktree_list=$(_aw_get_worktree_list)
     if [[ -n "$worktree_list" ]]; then
       while IFS= read -r wt_path; do
         if [[ -d "$wt_path" ]]; then
           local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
           if [[ -n "$wt_branch" ]]; then
-            if [[ "$provider" == "jira" ]]; then
-              local wt_issue=$(_aw_extract_jira_key "$wt_branch")
-            elif [[ "$provider" == "linear" ]]; then
-              local wt_issue=$(_aw_extract_linear_key "$wt_branch")
-            else
-              # Both GitHub and GitLab use issue numbers
-              local wt_issue=$(_aw_extract_issue_number "$wt_branch")
-            fi
+            local wt_issue=$(_aw_extract_issue_id_from_branch "$wt_branch" "$provider")
             if [[ -n "$wt_issue" ]]; then
               active_issues+=("$wt_issue")
             fi
@@ -141,7 +127,7 @@ _aw_issue() {
 
     if [[ -z "$selection" ]]; then
       gum style --foreground 3 "Cancelled"
-      return 0
+      return $AW_EXIT_CANCELLED
     fi
 
     # Handle special auto-select options (GitHub and Linear)
@@ -169,7 +155,7 @@ _aw_issue() {
 
       if [[ -z "$selection" ]]; then
         gum style --foreground 3 "Cancelled"
-        return 0
+        return $AW_EXIT_CANCELLED
       fi
 
       issue_id=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
@@ -224,29 +210,8 @@ _aw_issue() {
   fi
 
   # Check if a worktree already exists for this issue
-  local existing_worktree=""
-  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
-  if [[ -n "$worktree_list" ]]; then
-    while IFS= read -r wt_path; do
-      if [[ -d "$wt_path" ]]; then
-        local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-        if [[ -n "$wt_branch" ]]; then
-          local wt_issue=""
-          if [[ "$provider" == "jira" ]]; then
-            wt_issue=$(_aw_extract_jira_key "$wt_branch")
-          elif [[ "$provider" == "linear" ]]; then
-            wt_issue=$(_aw_extract_linear_key "$wt_branch")
-          else
-            wt_issue=$(_aw_extract_issue_number "$wt_branch")
-          fi
-          if [[ "$wt_issue" == "$issue_id" ]]; then
-            existing_worktree="$wt_path"
-            break
-          fi
-        fi
-      fi
-    done <<< "$worktree_list"
-  fi
+  local existing_worktree
+  existing_worktree=$(_aw_find_worktree_for_issue "$issue_id" "$provider")
 
   # If an active worktree exists for this issue, offer to resume it
   if [[ -n "$existing_worktree" ]]; then
@@ -312,7 +277,7 @@ _aw_issue() {
 
   if [[ -z "$branch_name" ]]; then
     gum style --foreground 3 "Cancelled"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Prepare context to pass to AI tool

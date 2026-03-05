@@ -4,6 +4,9 @@
 # Helper functions
 # ============================================================================
 
+# Exit code for user cancellation (e.g. Ctrl+C or gum prompt dismissed)
+readonly AW_EXIT_CANCELLED=130
+
 # Global variables for AI tool selection
 # Note: AI_CMD and AI_RESUME_CMD are arrays to properly handle arguments in zsh
 AI_CMD=()

@@ -426,3 +426,46 @@ _aw_configure_corporate_wrapper() {
   echo ""
 }
 
+_aw_get_config() {
+  # Generic getter for any auto-worktree git config key
+  # Args: $1 = key (without "auto-worktree." prefix)
+  local key="$1"
+  git config --get "auto-worktree.$key" 2>/dev/null || echo ""
+}
+
+_aw_set_config() {
+  # Generic setter for any auto-worktree git config key with optional enum validation
+  # Args: $1 = key, $2 = value, $3+ = allowed values (optional)
+  local key="$1"
+  local value="$2"
+  shift 2
+  local allowed=("$@")
+
+  if [[ ${#allowed[@]} -gt 0 ]]; then
+    local valid=false
+    for a in "${allowed[@]}"; do
+      [[ "$value" == "$a" ]] && valid=true && break
+    done
+    if ! $valid; then
+      gum style --foreground 1 "✗ Invalid value '$value'. Allowed: ${allowed[*]}"
+      return 1
+    fi
+  fi
+
+  git config "auto-worktree.$key" "$value"
+  gum style --foreground 2 "✓ $key set to: $value"
+}
+
+_aw_init_issue_provider() {
+  # Initialize and return the issue provider, prompting if not configured
+  # Returns: provider name on stdout; exits non-zero on failure
+  local provider
+  provider=$(_aw_get_issue_provider)
+  if [[ -z "$provider" ]]; then
+    _aw_prompt_issue_provider || return 1
+    provider=$(_aw_get_issue_provider)
+  fi
+  _aw_check_issue_provider_deps "$provider" || return 1
+  echo "$provider"
+}
+

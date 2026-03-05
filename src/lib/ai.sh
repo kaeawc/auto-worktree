@@ -4,6 +4,28 @@
 # AI Command Resolution
 # ============================================================================
 
+# Check if a tool is installed (available in PATH)
+# Args: $1 = tool name
+_aw_check_tool_installed() {
+  local tool="$1"
+  command -v "$tool" &>/dev/null
+}
+
+# Prompt user to choose an AI tool via gum choose menu
+# Args: $1 = optional header text (default: "Select AI tool")
+# Outputs the chosen option string to stdout
+_aw_prompt_ai_tool_choice() {
+  local header="${1:-Select AI tool}"
+  gum choose --header "$header" \
+    "Auto (prompt when needed)" \
+    "Claude Code" \
+    "Codex CLI" \
+    "Gemini CLI" \
+    "Google Jules CLI" \
+    "Skip AI tool" \
+    "Back"
+}
+
 # Check whether the active AI tool has a resumable session in the current directory
 _ai_has_resumable_session() {
   case "$AI_CMD_NAME" in
@@ -132,6 +154,7 @@ _ai_select_issues() {
 
   # Create a temporary file with the issue list
   local temp_issues=$(mktemp)
+  trap "rm -f \"$temp_issues\"" RETURN
   echo "$issues" > "$temp_issues"
 
   # Prepare the prompt for AI
@@ -150,21 +173,15 @@ $(cat "$temp_issues")
 Return only the 5 issue numbers, one per line, nothing else."
 
   # Use the configured AI tool to select issues
-  _resolve_ai_command || {
-    rm -f "$temp_issues"
-    return 1
-  }
+  _resolve_ai_command || return 1
 
   if [[ "${AI_CMD[1]}" == "skip" ]]; then
-    rm -f "$temp_issues"
     return 1
   fi
 
   # Run AI command with the prompt
   local selected_numbers
   selected_numbers=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[0-9]+$' | head -5)
-
-  rm -f "$temp_issues"
 
   if [[ -z "$selected_numbers" ]]; then
     return 1
@@ -189,6 +206,7 @@ _ai_select_linear_issues() {
 
   # Create a temporary file with the issue list
   local temp_issues=$(mktemp)
+  trap "rm -f \"$temp_issues\"" RETURN
   echo "$issues" > "$temp_issues"
 
   # Prepare the prompt for AI
@@ -206,21 +224,15 @@ $(cat "$temp_issues")
 Return only the 5 issue IDs, one per line, nothing else."
 
   # Use the configured AI tool to select issues
-  _resolve_ai_command || {
-    rm -f "$temp_issues"
-    return 1
-  }
+  _resolve_ai_command || return 1
 
   if [[ "${AI_CMD[1]}" == "skip" ]]; then
-    rm -f "$temp_issues"
     return 1
   fi
 
   # Run AI command with the prompt
   local selected_ids
   selected_ids=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[A-Z][A-Z0-9]+-[0-9]+$' | head -5)
-
-  rm -f "$temp_issues"
 
   if [[ -z "$selected_ids" ]]; then
     return 1
@@ -247,6 +259,7 @@ _ai_select_prs() {
 
   # Create a temporary file with the PR list
   local temp_prs=$(mktemp)
+  trap "rm -f \"$temp_prs\"" RETURN
   echo "$prs" > "$temp_prs"
 
   # Prepare the prompt for AI
@@ -269,21 +282,15 @@ $(cat "$temp_prs")
 Return only the 5 PR numbers, one per line, nothing else."
 
   # Use the configured AI tool to select PRs
-  _resolve_ai_command || {
-    rm -f "$temp_prs"
-    return 1
-  }
+  _resolve_ai_command || return 1
 
   if [[ "${AI_CMD[1]}" == "skip" ]]; then
-    rm -f "$temp_prs"
     return 1
   fi
 
   # Run AI command with the prompt
   local selected_numbers
   selected_numbers=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[0-9]+$' | head -5)
-
-  rm -f "$temp_prs"
 
   if [[ -z "$selected_numbers" ]]; then
     return 1

@@ -428,16 +428,8 @@ _aw_create_issue() {
   done
 
   # Determine issue provider
-  local provider=$(_aw_get_issue_provider)
-
-  # If not configured, prompt user to choose
-  if [[ -z "$provider" ]]; then
-    _aw_prompt_issue_provider || return 1
-    provider=$(_aw_get_issue_provider)
-  fi
-
-  # Check for provider-specific dependencies
-  _aw_check_issue_provider_deps "$provider" || return 1
+  local provider
+  provider=$(_aw_init_issue_provider) || return 1
 
   # Variables for issue creation
   local title=""

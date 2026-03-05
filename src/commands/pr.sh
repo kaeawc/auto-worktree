@@ -205,15 +205,8 @@ _aw_pr() {
   _aw_ensure_git_repo || return 1
   _aw_get_repo_info
 
-  # Determine provider - check if GitLab is configured, otherwise assume GitHub
-  local provider=$(_aw_get_issue_provider)
-  if [[ -z "$provider" ]] || [[ "$provider" == "jira" ]]; then
-    # Default to GitHub for PR workflow, or detect from remote
-    provider="github"
-  fi
-
-  # Check for provider-specific dependencies
-  _aw_check_issue_provider_deps "$provider" || return 1
+  local provider
+  provider=$(_aw_init_issue_provider) || return 1
 
   local pr_num="${1:-}"
 
@@ -278,7 +271,8 @@ _aw_pr() {
 
     # Detect which PRs/MRs have active worktrees
     local active_prs=()
-    local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+    local worktree_list
+    worktree_list=$(_aw_get_worktree_list)
     if [[ -n "$worktree_list" ]]; then
       while IFS= read -r wt_path; do
         if [[ -d "$wt_path" ]]; then
@@ -349,7 +343,7 @@ _aw_pr() {
 
     if [[ -z "$selection" ]]; then
       gum style --foreground 3 "Cancelled"
-      return 0
+      return $AW_EXIT_CANCELLED
     fi
 
     # Handle special auto-select options (GitHub only)
@@ -375,7 +369,7 @@ _aw_pr() {
 
       if [[ -z "$selection" ]]; then
         gum style --foreground 3 "Cancelled"
-        return 0
+        return $AW_EXIT_CANCELLED
       fi
 
       pr_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
@@ -475,7 +469,7 @@ _aw_pr() {
   action=$(_aw_pr_action_menu)
   if [[ -z "$action" ]]; then
     gum style --foreground 3 "Cancelled"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Build prompt and launch AI

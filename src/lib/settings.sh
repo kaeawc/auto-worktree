@@ -212,14 +212,7 @@ _aw_settings_ai_tool() {
     [[ -n "$current_cmd" ]] && header_text="AI tool preference (current: $current_label, cmd: $current_cmd)"
 
     local choice
-    choice=$(gum choose --header "$header_text" \
-      "Auto (prompt when needed)" \
-      "Claude Code" \
-      "Codex CLI" \
-      "Gemini CLI" \
-      "Google Jules CLI" \
-      "Skip AI tool" \
-      "Back")
+    choice=$(_aw_prompt_ai_tool_choice "$header_text")
 
     case "$choice" in
       "Auto (prompt when needed)")
