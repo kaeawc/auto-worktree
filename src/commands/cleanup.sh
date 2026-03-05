@@ -13,7 +13,7 @@ _aw_cleanup_interactive() {
   local worktree_list
   worktree_list=$(_aw_get_worktree_list)
   local worktree_count
-  worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
+  worktree_count=$(_aw_count_worktrees "$worktree_list")
 
   if [[ $worktree_count -le 1 ]]; then
     gum style --foreground 8 "No additional worktrees to clean up for $_AW_SOURCE_FOLDER"
@@ -28,9 +28,8 @@ _aw_cleanup_interactive() {
   local -a wt_dirty=()
 
   while IFS= read -r wt_path; do
-    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
+    _aw_validate_worktree_path "$wt_path" || continue
     [[ "$wt_path" == "$current_path" ]] && continue
-    [[ ! -d "$wt_path" ]] && continue
 
     local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
     local commit_timestamp
