@@ -96,6 +96,17 @@ _setup_ai_cmd() {
   esac
 }
 
+# Generic git config bool helpers for auto-worktree settings
+# Args: $1 = config key (without "auto-worktree." prefix)
+_aw_get_config_bool() {
+  git config --get "auto-worktree.$1" 2>/dev/null || echo "false"
+}
+
+# Args: $1 = config key (without "auto-worktree." prefix), $2 = value (true/false)
+_aw_set_config_bool() {
+  git config "auto-worktree.$1" "$2"
+}
+
 _aw_get_issue_autoselect() {
   local value
   value=$(git config --get --bool auto-worktree.issue-autoselect 2>/dev/null || echo "")
@@ -123,12 +134,12 @@ _is_autoselect_disabled() {
 
 # Disable auto-select
 _disable_autoselect() {
-  git config auto-worktree.issue-autoselect false
+  _aw_set_config_bool "issue-autoselect" "false"
 }
 
 # Enable auto-select
 _enable_autoselect() {
-  git config auto-worktree.issue-autoselect true
+  _aw_set_config_bool "issue-autoselect" "true"
 }
 
 # Check if PR auto-select is disabled
@@ -138,12 +149,63 @@ _is_pr_autoselect_disabled() {
 
 # Disable PR auto-select
 _disable_pr_autoselect() {
-  git config auto-worktree.pr-autoselect false
+  _aw_set_config_bool "pr-autoselect" "false"
 }
 
 # Enable PR auto-select
 _enable_pr_autoselect() {
-  git config auto-worktree.pr-autoselect true
+  _aw_set_config_bool "pr-autoselect" "true"
+}
+
+# Shared AI-powered item selection - filters to top 5 items in priority order
+# Args:
+#   $1 = items        : raw list of items to analyze
+#   $2 = highlighted  : formatted list of items (with highlight markers) to filter
+#   $3 = prompt       : full AI prompt text to send
+#   $4 = grep_pattern : regex to extract selected IDs from AI output
+#   $5 = match_prefix : prefix pattern for matching items in highlighted list (e.g., "#" or "")
+_ai_select_items() {
+  local items="$1"
+  local highlighted="$2"
+  local prompt="$3"
+  local grep_pattern="$4"
+  local match_prefix="$5"
+
+  # Create a temporary file with the item list
+  local temp_items
+  temp_items=$(mktemp)
+  trap "rm -f \"$temp_items\"" RETURN
+  echo "$items" > "$temp_items"
+
+  # Expand the items content into the prompt (replace placeholder)
+  prompt="${prompt//__ITEMS__/$(cat "$temp_items")}"
+
+  # Use the configured AI tool to select items
+  _resolve_ai_command || return 1
+
+  if [[ "${AI_CMD[1]}" == "skip" ]]; then
+    return 1
+  fi
+
+  # Run AI command with the prompt and extract selected IDs
+  local selected
+  selected=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E "$grep_pattern" | head -5)
+
+  if [[ -z "$selected" ]]; then
+    return 1
+  fi
+
+  # Filter highlighted items to only include selected ones, in priority order
+  local filtered=""
+  while IFS= read -r id; do
+    local matching
+    matching=$(echo "$highlighted" | grep -E "^(● )?${match_prefix}${id} \|" | head -1)
+    if [[ -n "$matching" ]]; then
+      filtered+="${matching}"$'\n'
+    fi
+  done <<< "$selected"
+
+  echo "$filtered"
 }
 
 # AI-powered issue selection - filters to top 5 issues in priority order
@@ -152,12 +214,6 @@ _ai_select_issues() {
   local highlighted_issues="$2"
   local repo_info="$3"
 
-  # Create a temporary file with the issue list
-  local temp_issues=$(mktemp)
-  trap "rm -f \"$temp_issues\"" RETURN
-  echo "$issues" > "$temp_issues"
-
-  # Prepare the prompt for AI
   local prompt="Analyze the following GitHub issues and select the top 5 issues that would be best to work on next. Consider:
 - Priority labels (high priority, urgent, etc.)
 - Issue type (bug fixes are often higher priority than features)
@@ -168,35 +224,11 @@ _ai_select_issues() {
 Return ONLY the top 5 issue numbers in priority order (one per line), formatted as just the numbers (e.g., '42').
 
 Issues:
-$(cat "$temp_issues")
+__ITEMS__
 
 Return only the 5 issue numbers, one per line, nothing else."
 
-  # Use the configured AI tool to select issues
-  _resolve_ai_command || return 1
-
-  if [[ "${AI_CMD[1]}" == "skip" ]]; then
-    return 1
-  fi
-
-  # Run AI command with the prompt
-  local selected_numbers
-  selected_numbers=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[0-9]+$' | head -5)
-
-  if [[ -z "$selected_numbers" ]]; then
-    return 1
-  fi
-
-  # Filter highlighted issues to only include selected ones, in priority order
-  local filtered=""
-  while IFS= read -r num; do
-    local matching_issue=$(echo "$highlighted_issues" | grep -E "^(● )?#${num} \|" | head -1)
-    if [[ -n "$matching_issue" ]]; then
-      filtered+="${matching_issue}"$'\n'
-    fi
-  done <<< "$selected_numbers"
-
-  echo "$filtered"
+  _ai_select_items "$issues" "$highlighted_issues" "$prompt" '^[0-9]+$' '#'
 }
 
 # AI-powered Linear issue selection - filters to top 5 issues in priority order
@@ -204,12 +236,6 @@ _ai_select_linear_issues() {
   local issues="$1"
   local highlighted_issues="$2"
 
-  # Create a temporary file with the issue list
-  local temp_issues=$(mktemp)
-  trap "rm -f \"$temp_issues\"" RETURN
-  echo "$issues" > "$temp_issues"
-
-  # Prepare the prompt for AI
   local prompt="Analyze the following Linear issues and select the top 5 issues that would be best to work on next. Consider:
 - Priority and status
 - Issue complexity and impact
@@ -219,35 +245,11 @@ _ai_select_linear_issues() {
 Return ONLY the top 5 issue IDs in priority order (one per line), formatted as issue IDs (e.g., 'TEAM-42').
 
 Issues:
-$(cat "$temp_issues")
+__ITEMS__
 
 Return only the 5 issue IDs, one per line, nothing else."
 
-  # Use the configured AI tool to select issues
-  _resolve_ai_command || return 1
-
-  if [[ "${AI_CMD[1]}" == "skip" ]]; then
-    return 1
-  fi
-
-  # Run AI command with the prompt
-  local selected_ids
-  selected_ids=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[A-Z][A-Z0-9]+-[0-9]+$' | head -5)
-
-  if [[ -z "$selected_ids" ]]; then
-    return 1
-  fi
-
-  # Filter highlighted issues to only include selected ones, in priority order
-  local filtered=""
-  while IFS= read -r id; do
-    local matching_issue=$(echo "$highlighted_issues" | grep -E "^(● )?${id} \|" | head -1)
-    if [[ -n "$matching_issue" ]]; then
-      filtered+="${matching_issue}"$'\n'
-    fi
-  done <<< "$selected_ids"
-
-  echo "$filtered"
+  _ai_select_items "$issues" "$highlighted_issues" "$prompt" '^[A-Z][A-Z0-9]+-[0-9]+$' ''
 }
 
 # AI-powered PR selection - filters to top 5 PRs in priority order
@@ -257,12 +259,6 @@ _ai_select_prs() {
   local current_user="$3"
   local repo_info="$4"
 
-  # Create a temporary file with the PR list
-  local temp_prs=$(mktemp)
-  trap "rm -f \"$temp_prs\"" RETURN
-  echo "$prs" > "$temp_prs"
-
-  # Prepare the prompt for AI
   local prompt="Analyze the following GitHub Pull Requests and select the top 5 PRs that would be best to review next. Consider the following criteria in priority order:
 
 1. PRs where the current user ($current_user) was requested as a reviewer (highest priority)
@@ -277,35 +273,11 @@ Repository: $repo_info
 Current user: $current_user
 
 Pull Requests:
-$(cat "$temp_prs")
+__ITEMS__
 
 Return only the 5 PR numbers, one per line, nothing else."
 
-  # Use the configured AI tool to select PRs
-  _resolve_ai_command || return 1
-
-  if [[ "${AI_CMD[1]}" == "skip" ]]; then
-    return 1
-  fi
-
-  # Run AI command with the prompt
-  local selected_numbers
-  selected_numbers=$(echo "$prompt" | "${AI_CMD[@]}" --no-tty 2>/dev/null | grep -E '^[0-9]+$' | head -5)
-
-  if [[ -z "$selected_numbers" ]]; then
-    return 1
-  fi
-
-  # Filter highlighted PRs to only include selected ones, in priority order
-  local filtered=""
-  while IFS= read -r num; do
-    local matching_pr=$(echo "$highlighted_prs" | grep -E "^(● )?#${num} \|" | head -1)
-    if [[ -n "$matching_pr" ]]; then
-      filtered+="${matching_pr}"$'\n'
-    fi
-  done <<< "$selected_numbers"
-
-  echo "$filtered"
+  _ai_select_items "$prs" "$highlighted_prs" "$prompt" '^[0-9]+$' '#'
 }
 
 # Install AI tool via interactive menu
