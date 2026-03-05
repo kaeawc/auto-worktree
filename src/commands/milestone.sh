@@ -90,13 +90,23 @@ _aw_select_milestone() {
 
   if [[ -z "$selection" ]]; then
     gum style --foreground 3 "Cancelled"
-    return $AW_EXIT_CANCELLED
+    return "${AW_EXIT_CANCELLED:-130}"
   fi
 
   # Extract milestone ID and title from selection
   # Format: "ID | Title | [labels...]" or "KEY | Title | [labels...]"
   milestone_id=$(echo "$selection" | cut -d'|' -f1 | tr -d ' ')
   milestone_title=$(echo "$selection" | cut -d'|' -f2 | sed 's/^ *//;s/ *$//')
+
+  if [[ -z "$milestone_id" ]]; then
+    gum style --foreground 1 "Error: Could not extract milestone ID from selection"
+    return 1
+  fi
+
+  if [[ -z "$milestone_title" ]]; then
+    gum style --foreground 1 "Error: Could not extract milestone title from selection"
+    return 1
+  fi
 
   return 0
 }
@@ -135,7 +145,7 @@ _aw_select_issue_by_milestone() {
   selection=$(echo "$issues" | gum filter --placeholder "Select an issue from ${term_lower} \"${ms_title}\"")
 
   if [[ -z "$selection" ]]; then
-    return 1
+    return "${AW_EXIT_CANCELLED:-130}"
   fi
 
   # Extract issue ID from selection
