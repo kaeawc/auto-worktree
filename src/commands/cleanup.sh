@@ -108,8 +108,8 @@ _aw_cleanup_interactive() {
   local -a selected_indices=()
   local i=1
   while IFS= read -r selected_item; do
-    local j=1
-    while [[ $j -le ${#wt_choices[@]} ]]; do
+    local j=0
+    while [[ $j -lt ${#wt_choices[@]} ]]; do
       if [[ "${wt_choices[$j]}" == "$selected_item" ]]; then
         selected_indices+=($j)
         break
@@ -169,7 +169,7 @@ _aw_cleanup_interactive() {
 
   if ! gum confirm "Delete these worktrees and their branches?"; then
     gum style --foreground 8 "Cleanup cancelled"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Perform cleanup (only clean worktrees)

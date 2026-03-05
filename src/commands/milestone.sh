@@ -90,7 +90,7 @@ _aw_select_milestone() {
 
   if [[ -z "$selection" ]]; then
     gum style --foreground 3 "Cancelled"
-    return 1
+    return $AW_EXIT_CANCELLED
   fi
 
   # Extract milestone ID and title from selection
