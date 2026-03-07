@@ -177,7 +177,7 @@ _ai_select_items() {
   # Create a temporary file with the item list
   local temp_items
   temp_items=$(mktemp 2>/dev/null) || { gum style --foreground 1 "Error: Failed to create temp file"; return 1; }
-  trap "rm -f \"$temp_items\"" RETURN
+  trap 'rm -f "$temp_items"' RETURN
   echo "$items" > "$temp_items"
 
   # Expand the items content into the prompt (replace placeholder)
