@@ -8,47 +8,27 @@ _aw_resume() {
   _aw_get_repo_info
   _aw_prune_worktrees
 
-  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
-  local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
+  local worktree_list=$(_aw_get_worktree_list)
+  local worktree_count=$(_aw_count_worktrees "$worktree_list")
 
   if [[ $worktree_count -le 1 ]]; then
     gum style --foreground 8 "No additional worktrees for $_AW_SOURCE_FOLDER"
     return 0
   fi
 
-  local now=$(date +%s)
-  local one_day=$((24 * 60 * 60))
-  local four_days=$((4 * 24 * 60 * 60))
-
   # Build selection list with formatted display
   local -a worktree_paths=()
   local -a worktree_displays=()
 
   while IFS= read -r wt_path; do
-    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
-    [[ ! -d "$wt_path" ]] && continue
+    _aw_validate_worktree_path "$wt_path" || continue
 
     local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-    local commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
-
-    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -print0 2>/dev/null | while IFS= read -r -d '' file; do _aw_get_file_mtime "$file"; done | sort -rn | head -1)
-    fi
+    local commit_timestamp=$(_aw_get_worktree_timestamp "$wt_path" "$wt_branch")
 
     # Build display string
-    local display="$(basename "$wt_path") ($wt_branch)"
-
-    if [[ -n "$commit_timestamp" ]] && [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      local age=$((now - commit_timestamp))
-      local age_days=$((age / one_day))
-      local age_hours=$((age / 3600))
-
-      if [[ $age -lt $one_day ]]; then
-        display="$display [${age_hours}h ago]"
-      else
-        display="$display [${age_days}d ago]"
-      fi
-    fi
+    local age_str=$(_aw_format_worktree_age "$commit_timestamp")
+    local display="$(basename "$wt_path") ($wt_branch) $age_str"
 
     worktree_paths+=("$wt_path")
     worktree_displays+=("$display")
@@ -65,27 +45,20 @@ _aw_resume() {
   echo ""
 
   # Create selection string from displays
-  local selection_list=""
-  local i=1
-  while [[ $i -le ${#worktree_displays[@]} ]]; do
-    selection_list+="${worktree_displays[$i]}"
-    if [[ $i -lt ${#worktree_displays[@]} ]]; then
-      selection_list+=$'\n'
-    fi
-    ((i++))
-  done
+  local selection_list
+  selection_list=$(printf '%s\n' "${worktree_displays[@]}")
 
   local selected=$(echo "$selection_list" | gum filter --placeholder "Select worktree to resume...")
 
   if [[ -z "$selected" ]]; then
     gum style --foreground 3 "Cancelled"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Find the corresponding path
   local selected_path=""
-  local i=1
-  while [[ $i -le ${#worktree_displays[@]} ]]; do
+  local i=0
+  while [[ $i -lt ${#worktree_displays[@]} ]]; do
     if [[ "${worktree_displays[$i]}" == "$selected" ]]; then
       selected_path="${worktree_paths[$i]}"
       break

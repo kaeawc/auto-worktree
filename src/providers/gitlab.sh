@@ -3,6 +3,16 @@
 # GitLab integration functions
 # ============================================================================
 
+_aw_gitlab_cmd() {
+  local server
+  server=$(_aw_get_gitlab_server)
+  if [[ -n "$server" ]]; then
+    echo "glab --host $server"
+  else
+    echo "glab"
+  fi
+}
+
 _aw_gitlab_check_closed() {
   # Check if a GitLab issue or MR is closed/merged
   # Returns 0 if closed/merged, 1 if open or error
@@ -14,11 +24,8 @@ _aw_gitlab_check_closed() {
   fi
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Get state using glab CLI
   local state
@@ -46,14 +53,15 @@ _aw_gitlab_check_closed() {
 _aw_gitlab_list_issues() {
   # List GitLab issues
   # Returns formatted issue list similar to GitHub issues
+  if ! command -v glab &>/dev/null; then
+    return 1
+  fi
+
   local project=$(_aw_get_gitlab_project)
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Add project filter if configured
   local project_args=""
@@ -71,17 +79,22 @@ _aw_gitlab_list_issues() {
         title = $2
         labels = $3
 
-        # Format: #123 | Title | [label1][label2]
-        printf "%s | %s", number, title
-        if (labels != "" && labels != "()") {
-          # Clean up labels format
-          gsub(/[()]/, "", labels)
-          gsub(/, /, "][", labels)
-          printf " | [%s]", labels
-        }
-        printf "\n"
+        # Remove surrounding parentheses from labels, e.g. "(foo, bar)" -> "foo, bar"
+        gsub(/^\(/, "", labels)
+        gsub(/\)$/, "", labels)
+
+        printf "%s\t%s\t%s\n", number, title, labels
       }
-    }'
+    }' | \
+    while IFS=$'\t' read -r number title labels; do
+      local formatted_labels
+      formatted_labels=$(_aw_format_labels "$labels")
+      if [[ -n "$formatted_labels" ]]; then
+        echo "${number} | ${title} | ${formatted_labels}"
+      else
+        echo "${number} | ${title}"
+      fi
+    done
 }
 
 _aw_gitlab_get_issue_details() {
@@ -94,11 +107,8 @@ _aw_gitlab_get_issue_details() {
   fi
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Get issue details in JSON format
   local issue_json=$($glab_cmd issue view "$issue_id" --json title,description 2>/dev/null)
@@ -120,11 +130,8 @@ _aw_gitlab_list_mrs() {
   local project=$(_aw_get_gitlab_project)
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Add project filter if configured
   local project_args=""
@@ -162,11 +169,8 @@ _aw_gitlab_get_mr_details() {
   fi
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Get MR details in JSON format
   local mr_json=$($glab_cmd mr view "$mr_id" --json title,description,sourceBranch,targetBranch 2>/dev/null)
@@ -190,11 +194,8 @@ _aw_gitlab_list_milestones() {
   local project=$(_aw_get_gitlab_project)
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # URL-encode the project path for the API
   local project_path=""
@@ -232,11 +233,8 @@ _aw_gitlab_list_issues_by_milestone() {
   fi
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Add project filter if configured
   local project_args=""
@@ -252,15 +250,22 @@ _aw_gitlab_list_issues_by_milestone() {
         title = $2
         labels = $3
 
-        printf "%s | %s", number, title
-        if (labels != "" && labels != "()") {
-          gsub(/[()]/, "", labels)
-          gsub(/, /, "][", labels)
-          printf " | [%s]", labels
-        }
-        printf "\n"
+        # Remove surrounding parentheses from labels, e.g. "(foo, bar)" -> "foo, bar"
+        gsub(/^\(/, "", labels)
+        gsub(/\)$/, "", labels)
+
+        printf "%s\t%s\t%s\n", number, title, labels
       }
-    }'
+    }' | \
+    while IFS=$'\t' read -r number title labels; do
+      local formatted_labels
+      formatted_labels=$(_aw_format_labels "$labels")
+      if [[ -n "$formatted_labels" ]]; then
+        echo "${number} | ${title} | ${formatted_labels}"
+      else
+        echo "${number} | ${title}"
+      fi
+    done
 }
 
 _aw_gitlab_check_mr_merged() {
@@ -273,11 +278,8 @@ _aw_gitlab_check_mr_merged() {
   fi
 
   # Build glab command with server option if configured
-  local glab_cmd="glab"
-  local server=$(_aw_get_gitlab_server)
-  if [[ -n "$server" ]]; then
-    glab_cmd="glab --host $server"
-  fi
+  local glab_cmd
+  glab_cmd=$(_aw_gitlab_cmd)
 
   # Check if there's a merged MR for this branch
   local mr_state=$($glab_cmd mr view "$branch_name" --json state 2>/dev/null | jq -r '.state')

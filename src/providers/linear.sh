@@ -12,6 +12,10 @@ _aw_linear_check_completed() {
     return 1
   fi
 
+  if ! command -v linear &>/dev/null; then
+    return 1
+  fi
+
   # Get issue details using Linear CLI
   # The 'linear issue view' command outputs markdown with issue details
   local issue_view=$(linear issue view "$issue_id" 2>/dev/null)
@@ -46,6 +50,10 @@ _aw_linear_check_completed() {
 _aw_linear_list_issues() {
   # List Linear issues
   # Returns formatted issue list similar to GitHub issues
+  if ! command -v linear &>/dev/null; then
+    return 1
+  fi
+
   local team=$(_aw_get_linear_team)
 
   # List issues using Linear CLI
@@ -90,6 +98,10 @@ _aw_linear_get_issue_details() {
     return 1
   fi
 
+  if ! command -v linear &>/dev/null; then
+    return 1
+  fi
+
   # Get issue details using Linear CLI
   local issue_view=$(linear issue view "$issue_id" 2>/dev/null)
 
@@ -120,13 +132,13 @@ _aw_linear_get_issue_details() {
 
 _aw_linear_list_milestones() {
   # Linear does not support project/milestone listing via CLI
-  gum style --foreground 1 "Linear does not support project/milestone listing via CLI"
+  echo "Linear does not support project/milestone listing via CLI" >&2
   return 1
 }
 
 _aw_linear_list_issues_by_milestone() {
   # Linear does not support filtering issues by project via CLI
-  gum style --foreground 1 "Linear does not support filtering issues by project via CLI"
+  echo "Linear does not support filtering issues by project via CLI" >&2
   return 1
 }
 

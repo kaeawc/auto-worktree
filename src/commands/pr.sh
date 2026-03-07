@@ -205,15 +205,14 @@ _aw_pr() {
   _aw_ensure_git_repo || return 1
   _aw_get_repo_info
 
-  # Determine provider - check if GitLab is configured, otherwise assume GitHub
-  local provider=$(_aw_get_issue_provider)
-  if [[ -z "$provider" ]] || [[ "$provider" == "jira" ]]; then
-    # Default to GitHub for PR workflow, or detect from remote
+  # PR/MR commands use the git hosting provider (github/gitlab), not the issue
+  # tracker. Map jira/linear → github so users with JIRA/Linear as their issue
+  # provider can still review GitHub PRs without needing jira/linear CLIs.
+  local provider
+  provider=$(_aw_get_issue_provider)
+  if [[ "$provider" == "jira" ]] || [[ "$provider" == "linear" ]] || [[ -z "$provider" ]]; then
     provider="github"
   fi
-
-  # Check for provider-specific dependencies
-  _aw_check_issue_provider_deps "$provider" || return 1
 
   local pr_num="${1:-}"
 
@@ -278,22 +277,22 @@ _aw_pr() {
 
     # Detect which PRs/MRs have active worktrees
     local active_prs=()
-    local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
+    local worktree_list
+    worktree_list=$(_aw_get_worktree_list)
     if [[ -n "$worktree_list" ]]; then
       while IFS= read -r wt_path; do
-        if [[ -d "$wt_path" ]]; then
-          local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
-          # Check if worktree path contains pr-{number} or mr-{number} pattern
-          if [[ "$wt_path" =~ (pr|mr)-([0-9]+) ]]; then
-            active_prs+=("${BASH_REMATCH[2]}")
-          fi
-          # Also check by branch name in case PR/MR uses the actual head branch
-          if [[ -n "$wt_branch" ]]; then
-            # Extract PR/MR number from branch in prs data
-            local matching_pr=$(echo "$prs" | grep -E " \| ${wt_branch}\$" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
-            if [[ -n "$matching_pr" ]]; then
-              active_prs+=("$matching_pr")
-            fi
+        _aw_validate_worktree_path "$wt_path" || continue
+        local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+        # Check if worktree path contains pr-{number} or mr-{number} pattern
+        if [[ "$wt_path" =~ (pr|mr)-([0-9]+) ]]; then
+          active_prs+=("${BASH_REMATCH[2]}")
+        fi
+        # Also check by branch name in case PR/MR uses the actual head branch
+        if [[ -n "$wt_branch" ]]; then
+          # Extract PR/MR number from branch in prs data
+          local matching_pr=$(_aw_extract_id_from_selection "$(echo "$prs" | grep -E " \| ${wt_branch}\$")")
+          if [[ -n "$matching_pr" ]]; then
+            active_prs+=("$matching_pr")
           fi
         fi
       done <<< "$worktree_list"
@@ -304,7 +303,7 @@ _aw_pr() {
     while IFS= read -r pr_line; do
       if [[ -n "$pr_line" ]]; then
         # Extract PR number from the line
-        local line_pr=$(echo "$pr_line" | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+        local line_pr=$(_aw_extract_id_from_selection "$pr_line")
         # Check if this PR has an active worktree
         local is_active=false
         for active in "${active_prs[@]}"; do
@@ -349,7 +348,7 @@ _aw_pr() {
 
     if [[ -z "$selection" ]]; then
       gum style --foreground 3 "Cancelled"
-      return 0
+      return $AW_EXIT_CANCELLED
     fi
 
     # Handle special auto-select options (GitHub only)
@@ -375,10 +374,10 @@ _aw_pr() {
 
       if [[ -z "$selection" ]]; then
         gum style --foreground 3 "Cancelled"
-        return 0
+        return $AW_EXIT_CANCELLED
       fi
 
-      pr_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+      pr_num=$(_aw_extract_id_from_selection "$selection")
 
     elif [[ "$provider" == "github" ]] && [[ "$selection" == "🚫 Do not show me auto select again" ]]; then
       _disable_pr_autoselect
@@ -395,7 +394,7 @@ _aw_pr() {
       return $?
 
     else
-      pr_num=$(echo "$selection" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' ')
+      pr_num=$(_aw_extract_id_from_selection "$selection")
     fi
   fi
 
@@ -475,7 +474,7 @@ _aw_pr() {
   action=$(_aw_pr_action_menu)
   if [[ -z "$action" ]]; then
     gum style --foreground 3 "Cancelled"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Build prompt and launch AI

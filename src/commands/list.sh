@@ -8,8 +8,8 @@ _aw_list() {
   _aw_get_repo_info
   _aw_prune_worktrees
 
-  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
-  local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
+  local worktree_list=$(_aw_get_worktree_list)
+  local worktree_count=$(_aw_count_worktrees "$worktree_list")
 
   if [[ $worktree_count -le 1 ]]; then
     gum style --foreground 8 "No additional worktrees for $_AW_SOURCE_FOLDER"
@@ -32,29 +32,20 @@ _aw_list() {
   local output=""
 
   while IFS= read -r wt_path; do
-    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
-    [[ ! -d "$wt_path" ]] && continue
+    _aw_validate_worktree_path "$wt_path" || continue
 
     local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-    local commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
-
-    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      # Try branch creation date from reflog (when the branch was first checked out/created)
-      commit_timestamp=$(git -C "$wt_path" reflog show --format=%ct "$wt_branch" 2>/dev/null | tail -1)
-    fi
-
-    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -print0 2>/dev/null | while IFS= read -r -d '' file; do _aw_get_file_mtime "$file"; done | sort -rn | head -1)
-    fi
+    local commit_timestamp=$(_aw_get_worktree_timestamp "$wt_path" "$wt_branch")
 
     # Check if this worktree is linked to a merged/resolved issue or has a merged PR
-    # Try to detect both GitHub issues and JIRA keys
+    # Use _aw_extract_issue_id (not the provider-bound variant) so that branches
+    # like work/PROJ-42-... are detected as JIRA keys even when provider is unset,
+    # rather than being truncated to numeric #42 and checked as a GitHub issue.
     local issue_id=$(_aw_extract_issue_id "$wt_branch")
     local is_merged=false
     local merged_indicator=""
     local merge_reason=""
 
-    # _AW_DETECTED_ISSUE_TYPE is set by _aw_extract_issue_id
     if [[ -n "$issue_id" ]]; then
       if [[ "$_AW_DETECTED_ISSUE_TYPE" == "jira" ]]; then
         # Check if JIRA issue is resolved
@@ -143,22 +134,22 @@ _aw_list() {
       merged_wt_issues+=("$merge_reason")
     fi
 
-    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+    local age_label=$(_aw_format_worktree_age "$commit_timestamp")
+
+    if [[ "$age_label" == "[unknown]" ]]; then
       output+="  $(gum style --foreground 8 "$(basename "$wt_path")") ($wt_branch) [unknown]${merged_indicator}\n"
       continue
     fi
 
     local age=$((now - commit_timestamp))
-    local age_days=$((age / one_day))
-    local age_hours=$((age / 3600))
 
     # Build age string and color inline to avoid zsh variable assignment echo bug
     if [[ $age -lt $one_day ]]; then
-      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 2 "[${age_hours}h ago]")${merged_indicator}\n"
+      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 2 "$age_label")${merged_indicator}\n"
     elif [[ $age -lt $four_days ]]; then
-      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 3 "[${age_days}d ago]")${merged_indicator}\n"
+      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 3 "$age_label")${merged_indicator}\n"
     else
-      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 1 "[${age_days}d ago]")${merged_indicator}\n"
+      output+="  $(basename "$wt_path") ($wt_branch) $(gum style --foreground 1 "$age_label")${merged_indicator}\n"
       # Only track as stale if not already marked as merged
       if [[ "$is_merged" == "false" ]] && [[ $age -gt $oldest_age ]]; then
         oldest_age=$age
@@ -220,14 +211,7 @@ _aw_list() {
         local c_path="${cleanup_wt_paths[$i]}"
         local c_branch="${cleanup_wt_branches[$i]}"
 
-        echo ""
-        gum spin --spinner dot --title "Removing $(basename "$c_path")..." -- git worktree remove --force "$c_path"
-        gum style --foreground 2 "Worktree removed."
-
-        if git show-ref --verify --quiet "refs/heads/${c_branch}"; then
-          git branch -D "$c_branch" 2>/dev/null
-          gum style --foreground 2 "Branch deleted."
-        fi
+        _aw_remove_worktree_and_branch "$c_path" "$c_branch" || return 1
 
         ((i++))
       done

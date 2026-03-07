@@ -12,6 +12,10 @@ _aw_jira_check_resolved() {
     return 1
   fi
 
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   # Get issue status using JIRA CLI
   local status=$(jira issue view "$jira_key" --plain --columns status 2>/dev/null | tail -1 | awk '{print $NF}')
 
@@ -34,6 +38,10 @@ _aw_jira_check_resolved() {
 _aw_jira_list_issues() {
   # List JIRA issues using JQL
   # Returns formatted issue list similar to GitHub issues
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   local project=$(_aw_get_jira_project)
   local jql="status != Done AND status != Closed AND status != Resolved"
 
@@ -49,16 +57,18 @@ _aw_jira_list_issues() {
       key = $1
       summary = $2
       labels = $3
-
-      # Format similar to GitHub issue list
-      printf "%s | %s", key, summary
-      if (labels != "" && labels != "∅") {
-        # Split labels and format them
-        gsub(/,/, "][", labels)
-        printf " | [%s]", labels
-      }
-      printf "\n"
-    }'
+      if (labels == "∅") labels = ""
+      printf "%s\t%s\t%s\n", key, summary, labels
+    }' | \
+    while IFS=$'\t' read -r key summary labels; do
+      local formatted_labels
+      formatted_labels=$(_aw_format_labels "$labels")
+      if [[ -n "$formatted_labels" ]]; then
+        echo "${key} | ${summary} | ${formatted_labels}"
+      else
+        echo "${key} | ${summary}"
+      fi
+    done
 }
 
 _aw_jira_get_issue_details() {
@@ -67,6 +77,10 @@ _aw_jira_get_issue_details() {
   local jira_key="$1"
 
   if [[ -z "$jira_key" ]]; then
+    return 1
+  fi
+
+  if ! command -v jira &>/dev/null; then
     return 1
   fi
 
@@ -93,6 +107,10 @@ _aw_jira_get_issue_details() {
 _aw_jira_list_epics() {
   # List open JIRA epics
   # Output format: KEY | Summary | [Status]
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   local project=$(_aw_get_jira_project)
   local jql="type = Epic AND statusCategory != Done"
 
@@ -125,6 +143,10 @@ _aw_jira_list_issues_by_epic() {
     return 1
   fi
 
+  if ! command -v jira &>/dev/null; then
+    return 1
+  fi
+
   local jql="(\"Epic Link\" = $epic_key OR parent = $epic_key) AND statusCategory != Done"
   if [[ -n "$project" ]]; then
     jql="project = $project AND ($jql)"
@@ -135,14 +157,18 @@ _aw_jira_list_issues_by_epic() {
       key = $1
       summary = $2
       labels = $3
-
-      printf "%s | %s", key, summary
-      if (labels != "" && labels != "∅") {
-        gsub(/,/, "][", labels)
-        printf " | [%s]", labels
-      }
-      printf "\n"
-    }'
+      if (labels == "∅") labels = ""
+      printf "%s\t%s\t%s\n", key, summary, labels
+    }' | \
+    while IFS=$'\t' read -r key summary labels; do
+      local formatted_labels
+      formatted_labels=$(_aw_format_labels "$labels")
+      if [[ -n "$formatted_labels" ]]; then
+        echo "${key} | ${summary} | ${formatted_labels}"
+      else
+        echo "${key} | ${summary}"
+      fi
+    done
 }
 
 # ============================================================================

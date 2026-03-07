@@ -3,10 +3,49 @@
 # ============================================================================
 # Project configuration (git config based)
 # ============================================================================
+
+# Generic getter: _aw_get_config KEY
+# Returns the config value or empty string. Never errors.
+_aw_get_config() {
+  git config --get "auto-worktree.$1" 2>/dev/null || echo ""
+}
+
+# Generic setter: _aw_set_config KEY VALUE [ALLOWED_VALUE...]
+# Sets the config value. If ALLOWED_VALUES are provided, validates against them.
+# Returns 1 and prints error if validation fails.
+_aw_set_config() {
+  local key="$1"
+  local value="$2"
+  shift 2
+  local allowed=("$@")
+
+  if [[ ${#allowed[@]} -gt 0 ]]; then
+    local valid=false
+    for allowed_val in "${allowed[@]}"; do
+      [[ "$value" == "$allowed_val" ]] && valid=true && break
+    done
+    if [[ "$valid" == "false" ]]; then
+      gum style --foreground 1 "Error: '$value' is not valid for $key. Allowed: ${allowed[*]}"
+      return 1
+    fi
+  fi
+
+  if ! git config "auto-worktree.$key" "$value"; then
+    gum style --foreground 1 "Error: Failed to save setting '$key'"
+    return 1
+  fi
+}
+
+# Generic unsetter: _aw_unset_config KEY
+# Unsets a config key. Silently succeeds even if key doesn't exist.
+_aw_unset_config() {
+  git config --unset "auto-worktree.$1" 2>/dev/null || true
+}
+
 _aw_get_issue_provider() {
   # Get the configured issue provider
   # Returns: github, gitlab, jira, linear, or empty string if not configured
-  git config --get auto-worktree.issue-provider 2>/dev/null || echo ""
+  _aw_get_config "issue-provider"
 }
 
 _aw_set_issue_provider() {
@@ -18,102 +57,129 @@ _aw_set_issue_provider() {
     return 1
   fi
 
-  git config auto-worktree.issue-provider "$provider"
+  if ! git config auto-worktree.issue-provider "$provider"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-provider'"
+    return 1
+  fi
   gum style --foreground 2 "✓ Issue provider set to: $provider"
 }
 
 _aw_get_jira_server() {
   # Get the configured JIRA server URL
-  git config --get auto-worktree.jira-server 2>/dev/null || echo ""
+  _aw_get_config "jira-server"
 }
 
 _aw_set_jira_server() {
   # Set the JIRA server URL for this repository
   local server="$1"
-  git config auto-worktree.jira-server "$server"
+  if ! git config auto-worktree.jira-server "$server"; then
+    gum style --foreground 1 "Error: Failed to save setting 'jira-server'"
+    return 1
+  fi
   gum style --foreground 2 "✓ JIRA server set to: $server"
 }
 
 _aw_get_jira_project() {
   # Get the configured default JIRA project key
-  git config --get auto-worktree.jira-project 2>/dev/null || echo ""
+  _aw_get_config "jira-project"
 }
 
 _aw_set_jira_project() {
   # Set the default JIRA project key for this repository
   local project="$1"
-  git config auto-worktree.jira-project "$project"
+  if ! git config auto-worktree.jira-project "$project"; then
+    gum style --foreground 1 "Error: Failed to save setting 'jira-project'"
+    return 1
+  fi
   gum style --foreground 2 "✓ JIRA project set to: $project"
 }
 
 _aw_get_gitlab_server() {
   # Get the configured GitLab server URL
-  git config --get auto-worktree.gitlab-server 2>/dev/null || echo ""
+  _aw_get_config "gitlab-server"
 }
 
 _aw_set_gitlab_server() {
   # Set the GitLab server URL for this repository
   local server="$1"
-  git config auto-worktree.gitlab-server "$server"
+  if ! git config auto-worktree.gitlab-server "$server"; then
+    gum style --foreground 1 "Error: Failed to save setting 'gitlab-server'"
+    return 1
+  fi
   gum style --foreground 2 "✓ GitLab server set to: $server"
 }
 
 _aw_get_gitlab_project() {
   # Get the configured default GitLab project path
-  git config --get auto-worktree.gitlab-project 2>/dev/null || echo ""
+  _aw_get_config "gitlab-project"
 }
 
 _aw_set_gitlab_project() {
   # Set the default GitLab project path for this repository
   local project="$1"
-  git config auto-worktree.gitlab-project "$project"
+  if ! git config auto-worktree.gitlab-project "$project"; then
+    gum style --foreground 1 "Error: Failed to save setting 'gitlab-project'"
+    return 1
+  fi
   gum style --foreground 2 "✓ GitLab project set to: $project"
 }
 
 _aw_get_issue_templates_dir() {
   # Get the configured issue templates directory for current provider
-  git config --get auto-worktree.issue-templates-dir 2>/dev/null || echo ""
+  _aw_get_config "issue-templates-dir"
 }
 
 _aw_set_issue_templates_dir() {
   # Set the issue templates directory for this repository
   local dir="$1"
-  git config auto-worktree.issue-templates-dir "$dir"
+  if ! git config auto-worktree.issue-templates-dir "$dir"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-dir'"
+    return 1
+  fi
   gum style --foreground 2 "✓ Issue templates directory set to: $dir"
 }
 
 _aw_get_issue_templates_disabled() {
   # Check if user has disabled issue templates
   # Returns: "true" or "" (empty string means enabled)
-  git config --get auto-worktree.issue-templates-disabled 2>/dev/null || echo ""
+  _aw_get_config "issue-templates-disabled"
 }
 
 _aw_set_issue_templates_disabled() {
   # Disable issue templates for this repository
   local disabled="$1"  # "true" or "false"
-  git config auto-worktree.issue-templates-disabled "$disabled"
+  if ! git config auto-worktree.issue-templates-disabled "$disabled"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-disabled'"
+    return 1
+  fi
 }
 
 _aw_get_issue_templates_prompt_disabled() {
   # Check if user wants to skip template prompts in future
   # Returns: "true" or "" (empty string means should prompt)
-  git config --get auto-worktree.issue-templates-no-prompt 2>/dev/null || echo ""
+  _aw_get_config "issue-templates-no-prompt"
 }
 
 _aw_set_issue_templates_prompt_disabled() {
   # Set whether to prompt for templates in future
   local disabled="$1"  # "true" or "false"
-  git config auto-worktree.issue-templates-no-prompt "$disabled"
+  if ! git config auto-worktree.issue-templates-no-prompt "$disabled"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-no-prompt'"
+    return 1
+  fi
 }
 
 _aw_get_issue_templates_detected_flag() {
   # Check if we've already notified user about detected templates
-  git config --get auto-worktree.issue-templates-detected 2>/dev/null || echo ""
+  _aw_get_config "issue-templates-detected"
 }
 
 _aw_set_issue_templates_detected_flag() {
   # Set flag that we've notified user about templates
-  git config auto-worktree.issue-templates-detected "true"
+  if ! git config auto-worktree.issue-templates-detected "true"; then
+    gum style --foreground 1 "Error: Failed to save setting 'issue-templates-detected'"
+    return 1
+  fi
 }
 
 _aw_detect_issue_templates() {
@@ -317,13 +383,16 @@ _aw_configure_gitlab() {
 
 _aw_get_linear_team() {
   # Get the configured default Linear team key
-  git config --get auto-worktree.linear-team 2>/dev/null || echo ""
+  _aw_get_config "linear-team"
 }
 
 _aw_set_linear_team() {
   # Set the default Linear team key for this repository
   local team="$1"
-  git config auto-worktree.linear-team "$team"
+  if ! git config auto-worktree.linear-team "$team"; then
+    gum style --foreground 1 "Error: Failed to save setting 'linear-team'"
+    return 1
+  fi
   gum style --foreground 2 "✓ Linear team set to: $team"
 }
 
@@ -424,5 +493,18 @@ _aw_configure_corporate_wrapper() {
   echo "  Prefix: $prefix"
   echo "  Scope:  ${scope/--/}"
   echo ""
+}
+
+_aw_init_issue_provider() {
+  # Initialize and return the issue provider, prompting if not configured
+  # Returns: provider name on stdout; exits non-zero on failure
+  local provider
+  provider=$(_aw_get_issue_provider)
+  if [[ -z "$provider" ]]; then
+    _aw_prompt_issue_provider || return 1
+    provider=$(_aw_get_issue_provider)
+  fi
+  _aw_check_issue_provider_deps "$provider" || return 1
+  echo "$provider"
 }
 

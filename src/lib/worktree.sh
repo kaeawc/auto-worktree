@@ -113,3 +113,150 @@ _aw_create_worktree() {
     return 1
   fi
 }
+
+# ============================================================================
+# Shared worktree helper utilities
+# ============================================================================
+
+_aw_get_worktree_list() {
+  # Echo all worktree paths (one per line) from git worktree list
+  git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //'
+}
+
+_aw_get_worktree_timestamp() {
+  # Echo a unix timestamp integer for the given worktree path.
+  # Fallback chain: git log → git reflog → file mtime
+  local wt_path="$1"
+  local wt_branch="$2"
+
+  local commit_timestamp
+  commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
+
+  if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+    # Try branch creation date from reflog (when the branch was first checked out/created)
+    commit_timestamp=$(git -C "$wt_path" reflog show --format=%ct "$wt_branch" 2>/dev/null | tail -1)
+  fi
+
+  if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+    commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -print0 2>/dev/null | while IFS= read -r -d '' file; do _aw_get_file_mtime "$file"; done | sort -rn | head -1)
+  fi
+
+  echo "$commit_timestamp"
+}
+
+_aw_format_worktree_age() {
+  # Takes a unix timestamp, returns a human-readable age string like "[3d ago]" or "[14h ago]"
+  # If timestamp is empty or non-numeric, returns "[unknown]"
+  local timestamp="$1"
+  local now
+  now=$(date +%s)
+  local one_day=$((24 * 60 * 60))
+
+  if [[ -z "$timestamp" ]] || ! [[ "$timestamp" =~ ^[0-9]+$ ]]; then
+    echo "[unknown]"
+    return
+  fi
+
+  local age=$((now - timestamp))
+  local age_days=$((age / one_day))
+  local age_hours=$((age / 3600))
+
+  if [[ $age -lt $one_day ]]; then
+    echo "[${age_hours}h ago]"
+  else
+    echo "[${age_days}d ago]"
+  fi
+}
+
+_aw_find_worktree_for_issue() {
+  # Search all worktrees for one matching the given issue ID and provider.
+  # Echoes the matching worktree path, or returns 1 if not found.
+  # Usage: _aw_find_worktree_for_issue issue_id provider
+  local issue_id="$1"
+  local provider="$2"
+
+  local worktree_list
+  worktree_list=$(_aw_get_worktree_list)
+
+  if [[ -z "$worktree_list" ]]; then
+    return 1
+  fi
+
+  while IFS= read -r wt_path; do
+    if [[ -d "$wt_path" ]]; then
+      local wt_branch
+      wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+      if [[ -n "$wt_branch" ]]; then
+        local wt_issue=""
+        if [[ "$provider" == "jira" ]]; then
+          wt_issue=$(_aw_extract_jira_key "$wt_branch")
+        elif [[ "$provider" == "linear" ]]; then
+          wt_issue=$(_aw_extract_linear_key "$wt_branch")
+        else
+          wt_issue=$(_aw_extract_issue_number "$wt_branch")
+        fi
+        if [[ "$wt_issue" == "$issue_id" ]]; then
+          echo "$wt_path"
+          return 0
+        fi
+      fi
+    fi
+  done <<< "$worktree_list"
+
+  return 1
+}
+
+_aw_remove_worktree_and_branch() {
+  # Remove a worktree and optionally delete its branch.
+  # Usage: _aw_remove_worktree_and_branch worktree_path branch_name
+  # Returns 1 if the worktree removal fails.
+  local worktree_path="$1"
+  local branch_name="${2:-}"
+
+  echo ""
+  git worktree remove --force "$worktree_path"
+  local remove_exit=$?
+  if [[ $remove_exit -ne 0 ]]; then
+    gum style --foreground 1 "Error: Failed to remove worktree: $worktree_path"
+    return 1
+  fi
+
+  gum style --foreground 2 "✓ Worktree removed: $(basename "$worktree_path")"
+
+  if [[ -n "$branch_name" ]] && git show-ref --verify --quiet "refs/heads/${branch_name}"; then
+    if ! git branch -d "$branch_name" 2>/dev/null; then
+      # Branch has unmerged changes; force-delete
+      git branch -D "$branch_name" 2>/dev/null
+    fi
+    gum style --foreground 2 "✓ Branch deleted: $branch_name"
+  fi
+}
+
+_aw_validate_worktree_path() {
+  # Returns 0 if path is a valid non-main worktree, 1 otherwise.
+  # Usage: _aw_validate_worktree_path wt_path
+  local wt_path="$1"
+
+  [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && return 1
+  [[ ! -d "$wt_path" ]] && return 1
+
+  return 0
+}
+
+_aw_count_worktrees() {
+  # Counts lines in a worktree list string.
+  # Usage: _aw_count_worktrees "$worktree_list"
+  [[ -z "$1" ]] && echo 0 && return 0
+  echo "$1" | grep -c .
+}
+
+_aw_extract_id_from_selection() {
+  # Extract the numeric or key ID from a selection string produced by gum filter/choose.
+  # Handles formats like:
+  #   "#123 | Title..."        -> "123"
+  #   "● #123 | Title..."     -> "123"
+  #   "KEY-456 | Title..."    -> "KEY-456"
+  #   "● KEY-456 | Title..."  -> "KEY-456"
+  # Usage: _aw_extract_id_from_selection "$selection"
+  echo "$1" | sed 's/^● *//' | sed 's/^#//' | cut -d'|' -f1 | tr -d ' '
+}

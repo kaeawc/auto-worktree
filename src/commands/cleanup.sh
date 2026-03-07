@@ -8,17 +8,17 @@ _aw_cleanup_interactive() {
   _aw_get_repo_info
 
   local current_path=$(pwd)
-  local worktree_list=$(git worktree list --porcelain 2>/dev/null | grep "^worktree " | sed 's/^worktree //')
-  local worktree_count=$(echo "$worktree_list" | grep -c . 2>/dev/null || echo 0)
+  local provider
+  provider=$(_aw_init_issue_provider) || return 1
+  local worktree_list
+  worktree_list=$(_aw_get_worktree_list)
+  local worktree_count
+  worktree_count=$(_aw_count_worktrees "$worktree_list")
 
   if [[ $worktree_count -le 1 ]]; then
     gum style --foreground 8 "No additional worktrees to clean up for $_AW_SOURCE_FOLDER"
     return 0
   fi
-
-  local now=$(date +%s)
-  local one_day=$((24 * 60 * 60))
-  local four_days=$((4 * 24 * 60 * 60))
 
   # Build list of worktrees with their display information
   local -a wt_choices=()
@@ -28,21 +28,12 @@ _aw_cleanup_interactive() {
   local -a wt_dirty=()
 
   while IFS= read -r wt_path; do
-    [[ "$wt_path" == "$_AW_GIT_ROOT" ]] && continue
+    _aw_validate_worktree_path "$wt_path" || continue
     [[ "$wt_path" == "$current_path" ]] && continue
-    [[ ! -d "$wt_path" ]] && continue
 
     local wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
-    local commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
-
-    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      # Try branch creation date from reflog (when the branch was first checked out/created)
-      commit_timestamp=$(git -C "$wt_path" reflog show --format=%ct "$wt_branch" 2>/dev/null | tail -1)
-    fi
-
-    if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      commit_timestamp=$(find "$wt_path" -maxdepth 3 -type f -not -path '*/.git/*' -print0 2>/dev/null | while IFS= read -r -d '' file; do _aw_get_file_mtime "$file"; done | sort -rn | head -1)
-    fi
+    local commit_timestamp
+    commit_timestamp=$(_aw_get_worktree_timestamp "$wt_path" "$wt_branch")
 
     # Check for dirty git state (unstaged or uncommitted changes)
     local dirty_files=$(git -C "$wt_path" status --porcelain 2>/dev/null)
@@ -52,7 +43,8 @@ _aw_cleanup_interactive() {
     fi
 
     # Check merge/close status
-    local issue_num=$(_aw_extract_issue_number "$wt_branch")
+    local issue_num
+    issue_num=$(_aw_extract_issue_id_from_branch "$wt_branch" "$provider")
     local status_tag=""
     local warning_msg=""
 
@@ -78,20 +70,8 @@ _aw_cleanup_interactive() {
     fi
 
     # Build age string
-    local age_str=""
-    if [[ -n "$commit_timestamp" ]] && [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-      local age=$((now - commit_timestamp))
-      local age_days=$((age / one_day))
-      local age_hours=$((age / 3600))
-
-      if [[ $age -lt $one_day ]]; then
-        age_str="[${age_hours}h ago]"
-      else
-        age_str="[${age_days}d ago]"
-      fi
-    else
-      age_str="[unknown]"
-    fi
+    local age_str
+    age_str=$(_aw_format_worktree_age "$commit_timestamp")
 
     # Build display string
     local display_name="$(basename "$wt_path") ($wt_branch) $age_str"
@@ -120,15 +100,15 @@ _aw_cleanup_interactive() {
 
   if [[ -z "$selected" ]]; then
     gum style --foreground 8 "No worktrees selected for cleanup"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Find indices of selected worktrees
   local -a selected_indices=()
   local i=1
   while IFS= read -r selected_item; do
-    local j=1
-    while [[ $j -le ${#wt_choices[@]} ]]; do
+    local j=0
+    while [[ $j -lt ${#wt_choices[@]} ]]; do
       if [[ "${wt_choices[$j]}" == "$selected_item" ]]; then
         selected_indices+=($j)
         break
@@ -188,7 +168,7 @@ _aw_cleanup_interactive() {
 
   if ! gum confirm "Delete these worktrees and their branches?"; then
     gum style --foreground 8 "Cleanup cancelled"
-    return 0
+    return $AW_EXIT_CANCELLED
   fi
 
   # Perform cleanup (only clean worktrees)
@@ -196,14 +176,7 @@ _aw_cleanup_interactive() {
     local c_path="${wt_paths[$idx]}"
     local c_branch="${wt_branches[$idx]}"
 
-    echo ""
-    gum spin --spinner dot --title "Removing $(basename "$c_path")..." -- git worktree remove --force "$c_path"
-    gum style --foreground 2 "✓ Worktree removed: $(basename "$c_path")"
-
-    if git show-ref --verify --quiet "refs/heads/${c_branch}"; then
-      git branch -D "$c_branch" 2>/dev/null
-      gum style --foreground 2 "✓ Branch deleted: $c_branch"
-    fi
+    _aw_remove_worktree_and_branch "$c_path" "$c_branch" || return 1
   done
 
   echo ""

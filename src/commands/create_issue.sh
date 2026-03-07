@@ -3,6 +3,14 @@
 # ============================================================================
 # Issue creation: template parsing, provider create funcs, AI generation
 # ============================================================================
+
+# Validate that a required value is non-empty.
+# Args: $1 = value to check, $2 = field name for error message
+# Returns: 1 with error message if empty, 0 otherwise
+_aw_validate_required() {
+  [[ -n "$1" ]] || { gum style --foreground 1 "Error: $2 is required"; return 1; }
+}
+
 _aw_parse_template() {
   # Parse a markdown template file
   # Args: $1 = template file path
@@ -74,10 +82,7 @@ _aw_create_issue_github() {
   local title="$1"
   local body="$2"
 
-  if [[ -z "$title" ]]; then
-    gum style --foreground 1 "Error: Title is required"
-    return 1
-  fi
+  _aw_validate_required "$title" "Title" || return 1
 
   local issue_url=$(gh issue create --title "$title" --body "$body" 2>&1)
 
@@ -97,10 +102,7 @@ _aw_create_issue_gitlab() {
   local title="$1"
   local body="$2"
 
-  if [[ -z "$title" ]]; then
-    gum style --foreground 1 "Error: Title is required"
-    return 1
-  fi
+  _aw_validate_required "$title" "Title" || return 1
 
   local issue_url=$(glab issue create --title "$title" --description "$body" 2>&1)
 
@@ -120,8 +122,10 @@ _aw_create_issue_jira() {
   local title="$1"
   local body="$2"
 
-  if [[ -z "$title" ]]; then
-    gum style --foreground 1 "Error: Summary is required"
+  _aw_validate_required "$title" "Summary" || return 1
+
+  if ! command -v jira &>/dev/null; then
+    gum style --foreground 1 "Error: 'jira' CLI not found. Install from https://github.com/ankitpokhrel/jira-cli"
     return 1
   fi
 
@@ -157,8 +161,10 @@ _aw_create_issue_linear() {
   local title="$1"
   local body="$2"
 
-  if [[ -z "$title" ]]; then
-    gum style --foreground 1 "Error: Title is required"
+  _aw_validate_required "$title" "Title" || return 1
+
+  if ! command -v linear &>/dev/null; then
+    gum style --foreground 1 "Error: 'linear' CLI not found. Install from https://github.com/linear/linear-cli"
     return 1
   fi
 
@@ -428,16 +434,8 @@ _aw_create_issue() {
   done
 
   # Determine issue provider
-  local provider=$(_aw_get_issue_provider)
-
-  # If not configured, prompt user to choose
-  if [[ -z "$provider" ]]; then
-    _aw_prompt_issue_provider || return 1
-    provider=$(_aw_get_issue_provider)
-  fi
-
-  # Check for provider-specific dependencies
-  _aw_check_issue_provider_deps "$provider" || return 1
+  local provider
+  provider=$(_aw_init_issue_provider) || return 1
 
   # Variables for issue creation
   local title=""
