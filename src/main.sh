@@ -50,6 +50,8 @@ source "$_AW_SRC_DIR/lib/ai.sh"
 source "$_AW_SRC_DIR/lib/settings.sh"
 # shellcheck source=providers/common.sh
 source "$_AW_SRC_DIR/providers/common.sh"
+# shellcheck source=providers/github.sh
+source "$_AW_SRC_DIR/providers/github.sh"
 # shellcheck source=providers/gitlab.sh
 source "$_AW_SRC_DIR/providers/gitlab.sh"
 # shellcheck source=providers/jira.sh

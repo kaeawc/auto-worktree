@@ -38,23 +38,13 @@ _aw_list() {
     local commit_timestamp=$(_aw_get_worktree_timestamp "$wt_path" "$wt_branch")
 
     # Check if this worktree is linked to a merged/resolved issue or has a merged PR
-    # Try to detect both GitHub issues and JIRA keys
-    local provider=$(_aw_get_issue_provider)
-    local issue_id=$(_aw_extract_issue_id_from_branch "$wt_branch" "$provider")
+    # Use _aw_extract_issue_id (not the provider-bound variant) so that branches
+    # like work/PROJ-42-... are detected as JIRA keys even when provider is unset,
+    # rather than being truncated to numeric #42 and checked as a GitHub issue.
+    local issue_id=$(_aw_extract_issue_id "$wt_branch")
     local is_merged=false
     local merged_indicator=""
     local merge_reason=""
-
-    # Determine issue type from provider for downstream dispatch
-    if [[ "$provider" == "jira" ]]; then
-      _AW_DETECTED_ISSUE_TYPE="jira"
-    elif [[ "$provider" == "linear" ]]; then
-      _AW_DETECTED_ISSUE_TYPE="linear"
-    elif [[ "$provider" == "gitlab" ]]; then
-      _AW_DETECTED_ISSUE_TYPE="gitlab"
-    else
-      _AW_DETECTED_ISSUE_TYPE="github"
-    fi
 
     if [[ -n "$issue_id" ]]; then
       if [[ "$_AW_DETECTED_ISSUE_TYPE" == "jira" ]]; then

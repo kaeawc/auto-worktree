@@ -205,8 +205,14 @@ _aw_pr() {
   _aw_ensure_git_repo || return 1
   _aw_get_repo_info
 
+  # PR/MR commands use the git hosting provider (github/gitlab), not the issue
+  # tracker. Map jira/linear → github so users with JIRA/Linear as their issue
+  # provider can still review GitHub PRs without needing jira/linear CLIs.
   local provider
-  provider=$(_aw_init_issue_provider) || return 1
+  provider=$(_aw_get_issue_provider)
+  if [[ "$provider" == "jira" ]] || [[ "$provider" == "linear" ]] || [[ -z "$provider" ]]; then
+    provider="github"
+  fi
 
   local pr_num="${1:-}"
 
