@@ -55,10 +55,10 @@ _aw_resume() {
     return $AW_EXIT_CANCELLED
   fi
 
-  # Find the corresponding path
+  # Find the corresponding path (zsh arrays are 1-based)
   local selected_path=""
-  local i=0
-  while [[ $i -lt ${#worktree_displays[@]} ]]; do
+  local i=1
+  while [[ $i -le ${#worktree_displays[@]} ]]; do
     if [[ "${worktree_displays[$i]}" == "$selected" ]]; then
       selected_path="${worktree_paths[$i]}"
       break
