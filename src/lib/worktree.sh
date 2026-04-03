@@ -125,15 +125,25 @@ _aw_get_worktree_list() {
 
 _aw_get_worktree_timestamp() {
   # Echo a unix timestamp integer for the given worktree path.
-  # Fallback chain: git log → git reflog → file mtime
+  # Fallback chain: HEAD reflog → git log → branch reflog → file mtime
   local wt_path="$1"
   local wt_branch="$2"
 
   local commit_timestamp
-  commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
+
+  # First try: most recent HEAD reflog entry — this captures actual worktree activity
+  # (checkouts, commits, resets) rather than the age of the last commit on the branch.
+  # Without this, a worktree created seconds ago from a branch with a month-old commit
+  # would incorrectly show as "30d ago".
+  commit_timestamp=$(git -C "$wt_path" reflog show HEAD --format=%ct 2>/dev/null | head -1)
 
   if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
-    # Try branch creation date from reflog (when the branch was first checked out/created)
+    # Fallback: latest commit timestamp
+    commit_timestamp=$(git -C "$wt_path" log -1 --format=%ct 2>/dev/null)
+  fi
+
+  if [[ -z "$commit_timestamp" ]] || ! [[ "$commit_timestamp" =~ ^[0-9]+$ ]]; then
+    # Fallback: branch creation date from reflog
     commit_timestamp=$(git -C "$wt_path" reflog show --format=%ct "$wt_branch" 2>/dev/null | tail -1)
   fi
 
