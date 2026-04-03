@@ -294,6 +294,7 @@ _install_ai_tool() {
     "Install Codex CLI (OpenAI)" \
     "Install Gemini CLI (Google)" \
     "Install Google Jules CLI (Google)" \
+    "Configure CLI prefix wrapper (e.g. slack, goog)" \
     "Skip - don't use an AI tool" \
     "Cancel")
 
@@ -335,6 +336,57 @@ _install_ai_tool() {
       echo ""
       return 1
       ;;
+    "Configure CLI prefix wrapper (e.g. slack, goog)")
+      _aw_configure_corporate_wrapper
+      local configured_prefix=$(_aw_get_ai_tool_cmd)
+      configured_prefix="${configured_prefix%% *}"
+      if [[ -n "$configured_prefix" ]] && command -v "$configured_prefix" &>/dev/null; then
+        # Prefix is valid — ask which tool to use through it
+        echo ""
+        gum style --foreground 6 "Which AI tool is available via '$configured_prefix'?"
+        local tool_choice
+        tool_choice=$(gum choose \
+          "Claude Code" \
+          "Codex CLI" \
+          "Gemini CLI" \
+          "Google Jules CLI" \
+          "Cancel")
+        case "$tool_choice" in
+          "Claude Code")
+            _save_ai_preference "claude"
+            _setup_ai_cmd claude "claude"
+            gum style --foreground 2 "Configured: $configured_prefix claude"
+            return 0
+            ;;
+          "Codex CLI")
+            _save_ai_preference "codex"
+            _setup_ai_cmd codex "codex"
+            gum style --foreground 2 "Configured: $configured_prefix codex"
+            return 0
+            ;;
+          "Gemini CLI")
+            _save_ai_preference "gemini"
+            _setup_ai_cmd gemini "gemini"
+            gum style --foreground 2 "Configured: $configured_prefix gemini"
+            return 0
+            ;;
+          "Google Jules CLI")
+            _save_ai_preference "jules"
+            _setup_ai_cmd jules "jules"
+            gum style --foreground 2 "Configured: $configured_prefix jules"
+            return 0
+            ;;
+          *)
+            return 1
+            ;;
+        esac
+      else
+        if [[ -n "$configured_prefix" ]]; then
+          gum style --foreground 1 "Warning: '$configured_prefix' not found in PATH"
+        fi
+        return 1
+      fi
+      ;;
     "Skip - don't use an AI tool")
       AI_CMD=(skip)
       AI_CMD_NAME="none"
@@ -357,17 +409,29 @@ _resolve_ai_command() {
   local jules_path=""
 
   # Check which tools are available and get their full paths
-  claude_path=$(command -v claude 2>/dev/null)
+  claude_path=$(command -v claude 2>/dev/null) || true
   [[ -n "$claude_path" ]] && claude_available=true
 
-  codex_path=$(command -v codex 2>/dev/null)
+  codex_path=$(command -v codex 2>/dev/null) || true
   [[ -n "$codex_path" ]] && codex_available=true
 
-  gemini_path=$(command -v gemini 2>/dev/null)
+  gemini_path=$(command -v gemini 2>/dev/null) || true
   [[ -n "$gemini_path" ]] && gemini_available=true
 
-  jules_path=$(command -v jules 2>/dev/null)
+  jules_path=$(command -v jules 2>/dev/null) || true
   [[ -n "$jules_path" ]] && jules_available=true
+
+  # If a CLI prefix wrapper is configured and available, treat tools as
+  # accessible through the prefix even when the bare binary isn't in PATH.
+  local _prefix_cmd
+  _prefix_cmd=$(_aw_get_ai_tool_cmd)
+  _prefix_cmd="${_prefix_cmd%% *}"  # first word only (legacy compat)
+  if [[ -n "$_prefix_cmd" ]] && command -v "$_prefix_cmd" &>/dev/null; then
+    [[ "$claude_available" == false ]] && claude_available=true claude_path="claude"
+    [[ "$codex_available" == false ]]  && codex_available=true  codex_path="codex"
+    [[ "$gemini_available" == false ]] && gemini_available=true gemini_path="gemini"
+    [[ "$jules_available" == false ]]  && jules_available=true  jules_path="jules"
+  fi
 
   # Check for saved preference first
   local saved_pref=$(_load_ai_preference)
