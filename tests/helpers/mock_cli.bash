@@ -72,6 +72,72 @@ assert_cli_called() {
     || fail "Expected $tool to be called with: $expected_args"
 }
 
+# Creates a mock that returns different responses based on argument matching.
+# Responses are checked in order — first matching pattern wins.
+#
+# Usage: mock_cli_conditional <tool> <pattern1> <response1> [<pattern2> <response2> ...]
+#   tool     - the executable name (e.g. gh)
+#   patternN - a substring to match against "$*"
+#   responseN - the text to echo when the pattern matches
+#
+# Example:
+#   mock_cli_conditional gh \
+#     "issue list"    '{"issues": []}' \
+#     "issue view"    '{"title": "Bug"}' \
+#     "pr list"       '{"prs": []}'
+mock_cli_conditional() {
+  local tool="$1"
+  shift
+
+  # Build case arms from pattern/response pairs
+  local case_arms=""
+  while [[ $# -ge 2 ]]; do
+    local pattern="$1"
+    local response="$2"
+    shift 2
+    case_arms+="    *\"${pattern}\"*) echo '${response}' ;;"$'\n'
+  done
+
+  cat > "$MOCK_BIN_DIR/$tool" <<EOF
+#!/usr/bin/env bash
+echo "\$*" >> "$MOCK_BIN_DIR/${tool}.calls"
+case "\$*" in
+${case_arms}    *) echo "" ;;
+esac
+EOF
+  chmod +x "$MOCK_BIN_DIR/$tool"
+}
+
+# Assert that a mock CLI was called exactly N times.
+#
+# Usage: assert_cli_call_count <tool> <expected_count>
+assert_cli_call_count() {
+  local tool="$1"
+  local expected="$2"
+  local calls_file="$MOCK_BIN_DIR/${tool}.calls"
+
+  local actual=0
+  if [[ -f "$calls_file" ]]; then
+    actual=$(wc -l < "$calls_file" | tr -d ' ')
+  fi
+
+  if [[ "$actual" -ne "$expected" ]]; then
+    fail "Expected $tool to be called $expected time(s), but was called $actual time(s)"
+  fi
+}
+
+# Assert that a mock CLI was NOT called.
+#
+# Usage: refute_cli_called <tool>
+refute_cli_called() {
+  local tool="$1"
+  local calls_file="$MOCK_BIN_DIR/${tool}.calls"
+
+  if [[ -f "$calls_file" ]] && [[ -s "$calls_file" ]]; then
+    fail "Expected $tool NOT to be called, but it was called:"$'\n'"$(cat "$calls_file")"
+  fi
+}
+
 teardown_mock_cli() {
   rm -rf "$MOCK_BIN_DIR"
 }

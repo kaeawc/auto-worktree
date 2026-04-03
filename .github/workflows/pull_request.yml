@@ -33,9 +33,24 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          submodules: true
 
-      - name: Install bats
-        run: sudo apt-get install -y bats
+      - name: Install bats-core
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y parallel
+          git clone --depth 1 --branch v1.11.1 https://github.com/bats-core/bats-core.git /tmp/bats-core
+          sudo /tmp/bats-core/install.sh /usr/local
 
       - name: Run bats tests
-        run: bats tests/
+        run: |
+          mkdir -p reports
+          bats tests/ --jobs 4 --timing --report-formatter junit --output reports/
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bats-test-results
+          path: reports/
