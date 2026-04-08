@@ -255,6 +255,32 @@ teardown() {
   git -C "$TEST_REPO_DIR" branch -D "work/456-other-issue" 2>/dev/null || true
 }
 
+@test "_aw_find_worktree_for_issue: returns only matching path with multiple worktrees (no leaked output)" {
+  # Regression test: in zsh, re-declaring 'local var' inside a loop without
+  # assignment can print 'var=value' to stdout when TYPESET_SILENT is unset,
+  # causing all branch names to leak into the captured output.
+  local wt1="${TEST_REPO_DIR}-wt-100"
+  local wt2="${TEST_REPO_DIR}-wt-200"
+  local wt3="${TEST_REPO_DIR}-wt-300"
+  git -C "$TEST_REPO_DIR" worktree add -b "work/100-unrelated" "$wt1"
+  git -C "$TEST_REPO_DIR" worktree add -b "work/200-target-issue" "$wt2"
+  git -C "$TEST_REPO_DIR" worktree add -b "work/300-another" "$wt3"
+
+  run _aw_find_worktree_for_issue "200" "github"
+  [ "$status" -eq 0 ]
+  # Output must be exactly one line — the matching path — with no extra lines
+  [ "$(echo "$output" | wc -l | tr -d ' ')" = "1" ]
+  [ "$output" = "$wt2" ]
+
+  # Cleanup
+  git -C "$TEST_REPO_DIR" worktree remove --force "$wt1" 2>/dev/null || true
+  git -C "$TEST_REPO_DIR" worktree remove --force "$wt2" 2>/dev/null || true
+  git -C "$TEST_REPO_DIR" worktree remove --force "$wt3" 2>/dev/null || true
+  git -C "$TEST_REPO_DIR" branch -D "work/100-unrelated" 2>/dev/null || true
+  git -C "$TEST_REPO_DIR" branch -D "work/200-target-issue" 2>/dev/null || true
+  git -C "$TEST_REPO_DIR" branch -D "work/300-another" 2>/dev/null || true
+}
+
 # ============================================================================
 # _aw_remove_worktree_and_branch
 # ============================================================================
