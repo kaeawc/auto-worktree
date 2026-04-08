@@ -192,12 +192,12 @@ _aw_find_worktree_for_issue() {
     return 1
   fi
 
+  local wt_branch wt_issue
   while IFS= read -r wt_path; do
     if [[ -d "$wt_path" ]]; then
-      local wt_branch
       wt_branch=$(git -C "$wt_path" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
       if [[ -n "$wt_branch" ]]; then
-        local wt_issue=""
+        wt_issue=""
         if [[ "$provider" == "jira" ]]; then
           wt_issue=$(_aw_extract_jira_key "$wt_branch")
         elif [[ "$provider" == "linear" ]]; then
